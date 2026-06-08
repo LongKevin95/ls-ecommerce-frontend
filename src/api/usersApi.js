@@ -1,110 +1,91 @@
-import { fetchUsersSnapshot, persistUsersSnapshot } from "./usersResourceApi";
+import { getUsers as getUsersService } from "../services/userService";
+import { readAuthSession } from "../utils/authStorage";
+import { getShops } from "./shopsApi";
+
+function normalizeEmail(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function buildShopByContactEmail(shops) {
+  return new Map(
+    (Array.isArray(shops) ? shops : [])
+      .map((shop) => [normalizeEmail(shop?.email), shop])
+      .filter(([email]) => email),
+  );
+}
+
+function normalizePublicUserFromShop(shop) {
+  const normalizedEmail = normalizeEmail(shop?.email ?? shop?.vendorEmail);
+  const shopName =
+    String(shop?.shopName ?? shop?.name ?? "").trim() ||
+    (normalizedEmail ? normalizedEmail.split("@")[0] : "Vendor Shop");
+
+  return {
+    id: String(shop?.id ?? shop?._id ?? normalizedEmail).trim(),
+    name: String(shop?.name ?? shopName).trim() || shopName,
+    email: normalizedEmail,
+    roles: ["vendor"],
+    status: "active",
+    avatarUrl: String(shop?.avatarUrl ?? "").trim(),
+    phone: String(shop?.phone ?? "").trim(),
+    address: String(shop?.address ?? "").trim(),
+    bio: String(shop?.bio ?? "").trim(),
+    shopName,
+  };
+}
 
 export const getUsers = async () => {
-  const { users } = await fetchUsersSnapshot();
-  return users;
-};
+  const currentSession = readAuthSession();
 
-export const updateVendorStatus = async ({ email, status, reason = null }) => {
-  const normalizedEmail = String(email ?? "")
-    .trim()
-    .toLowerCase();
-
-  if (!normalizedEmail) {
-    throw new Error("Missing vendor email.");
+  if (!currentSession?.accessToken) {
+    const shops = await getShops().catch(() => []);
+    return shops.map(normalizePublicUserFromShop);
   }
 
-  const normalizedStatus = String(status ?? "")
-    .trim()
-    .toLowerCase();
-  const normalizedReason = String(reason ?? "").trim();
-  const nextStatus = ["active", "rejected"].includes(normalizedStatus)
-    ? normalizedStatus
-    : "active";
-  const nextReason = nextStatus === "active" ? null : normalizedReason || null;
+  try {
+    const [users, shops] = await Promise.all([
+      getUsersService(),
+      getShops().catch(() => []),
+    ]);
+    const shopByEmail = buildShopByContactEmail(shops);
 
-  const snapshot = await fetchUsersSnapshot();
-  const { users } = snapshot;
-  const nextUsers = users.map((user) => {
-    const userEmail = String(user?.email ?? "")
-      .trim()
-      .toLowerCase();
-
-    if (userEmail !== normalizedEmail) {
-      return user;
-    }
-
-    return {
-      ...user,
-      status: nextStatus,
-      reason: nextReason,
-    };
-  });
-
-  await persistUsersSnapshot(snapshot, nextUsers);
+    return users.map((user) => {
+      const matchedShop = shopByEmail.get(normalizeEmail(user?.email));
+      return {
+        ...user,
+        shopName:
+          String(user?.shopName ?? user?.shop?.name ?? "").trim() ||
+          matchedShop?.shopName ||
+          matchedShop?.name ||
+          user?.name ||
+          (user?.email ? String(user.email).split("@")[0] : ""),
+        avatarUrl:
+          String(user?.avatarUrl ?? "").trim() ||
+          String(matchedShop?.avatarUrl ?? "").trim(),
+      };
+    });
+  } catch {
+    const shops = await getShops().catch(() => []);
+    return shops.map(normalizePublicUserFromShop);
+  }
 };
 
-export const updateCustomerStatus = async ({
-  email,
-  status,
-  reason = null,
-}) => {
-  const normalizedEmail = String(email ?? "")
-    .trim()
-    .toLowerCase();
-
-  if (!normalizedEmail) {
-    throw new Error("Missing customer email.");
-  }
-
-  const normalizedStatus = String(status ?? "")
-    .trim()
-    .toLowerCase();
-  const normalizedReason = String(reason ?? "").trim();
-
-  const nextStatus = ["active", "banned", "rejected"].includes(normalizedStatus)
-    ? normalizedStatus
-    : "active";
-
-  const snapshot = await fetchUsersSnapshot();
-  const { users } = snapshot;
-  const nextUsers = users.map((user) => {
-    const userEmail = String(user?.email ?? "")
-      .trim()
-      .toLowerCase();
-
-    if (userEmail !== normalizedEmail) {
-      return user;
-    }
-
-    return {
-      ...user,
-      status: nextStatus,
-      reason: nextStatus === "active" ? null : normalizedReason || null,
-    };
-  });
-
-  await persistUsersSnapshot(snapshot, nextUsers);
+export const updateVendorStatus = async () => {
+  throw new Error(
+    "Backend hiện chưa hỗ trợ admin cập nhật trạng thái vendor từ frontend này.",
+  );
 };
 
-export const deleteUserAccount = async ({ email }) => {
-  const normalizedEmail = String(email ?? "")
-    .trim()
-    .toLowerCase();
+export const updateCustomerStatus = async () => {
+  throw new Error(
+    "Backend hiện chưa hỗ trợ admin cập nhật trạng thái customer từ frontend này.",
+  );
+};
 
-  if (!normalizedEmail) {
-    throw new Error("Missing user email.");
-  }
-
-  const snapshot = await fetchUsersSnapshot();
-  const { users } = snapshot;
-  const nextUsers = users.filter((user) => {
-    const userEmail = String(user?.email ?? "")
-      .trim()
-      .toLowerCase();
-
-    return userEmail !== normalizedEmail;
-  });
-
-  await persistUsersSnapshot(snapshot, nextUsers);
+export const deleteUserAccount = async () => {
+  throw new Error(
+    "Backend hiện chưa hỗ trợ xoá tài khoản từ frontend quản trị này.",
+  );
 };

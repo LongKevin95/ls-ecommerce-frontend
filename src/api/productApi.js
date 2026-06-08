@@ -1,5 +1,15 @@
 import { fetchResourceDocument, updateResourceData } from "./resourceApi";
 import { syncShopsFromProducts } from "./shopsApi";
+import {
+  createVendorProduct as createVendorProductService,
+  deleteProductById as deleteProductByIdService,
+  getAdminProducts as getAdminProductsService,
+  getProductById as getProductByIdService,
+  getProducts as getProductsService,
+  getProductsByVendorId as getProductsByVendorIdService,
+  updateProductById as updateProductByIdService,
+} from "../services/productService";
+import { readAuthSession } from "../utils/authStorage";
 
 const PRODUCTS_RESOURCE_NAME = "ecommerce-data";
 
@@ -94,6 +104,141 @@ function normalizeStatus(status) {
   return PRODUCT_STATUS.PENDING;
 }
 
+function readCurrentUser() {
+  return readAuthSession()?.user ?? null;
+}
+
+function normalizeEmail(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeObjectValues(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.entries(value).reduce((result, [key, itemValue]) => {
+    const normalizedKey = String(key ?? "").trim();
+    const normalizedValue = String(itemValue ?? "").trim();
+
+    if (normalizedKey && normalizedValue) {
+      result[normalizedKey] = normalizedValue;
+    }
+
+    return result;
+  }, {});
+}
+
+function normalizeFieldDefinitions(fields) {
+  return Array.isArray(fields)
+    ? fields
+        .map((field) => ({
+          key: String(field?.key ?? "").trim(),
+          label: String(field?.label ?? field?.key ?? "").trim(),
+          inputType: String(field?.inputType ?? "text").trim() || "text",
+        }))
+        .filter((field) => field.key)
+    : [];
+}
+
+function normalizeCategoryConfig(config, fallbackCategory) {
+  const category = normalizeCategory(config?.slug ?? fallbackCategory);
+
+  return {
+    id: String(config?.id ?? config?._id ?? "").trim(),
+    slug: category,
+    name:
+      String(config?.name ?? formatProductCategoryLabel(category)).trim() ||
+      formatProductCategoryLabel(category),
+    productAttributeFields: normalizeFieldDefinitions(
+      config?.productAttributeFields,
+    ),
+    variantOptionFields: normalizeFieldDefinitions(config?.variantOptionFields),
+    variantAttributeFields: normalizeFieldDefinitions(
+      config?.variantAttributeFields,
+    ),
+  };
+}
+
+function buildVariantLabel(variant, categoryConfig) {
+  const optionValues = normalizeObjectValues(variant?.optionValues);
+  const orderedOptionLabels = (categoryConfig?.variantOptionFields ?? [])
+    .map((field) => optionValues[field.key])
+    .filter(Boolean);
+
+  if (orderedOptionLabels.length > 0) {
+    return orderedOptionLabels.join(" / ");
+  }
+
+  return String(variant?.label ?? variant?.title ?? "Default variant").trim();
+}
+
+function normalizeVariant(variant, categoryConfig) {
+  const optionValues = normalizeObjectValues(variant?.optionValues);
+  const attributes = normalizeObjectValues(variant?.attributes);
+
+  return {
+    ...variant,
+    id: String(variant?.id ?? variant?._id ?? "").trim(),
+    sku: String(variant?.sku ?? "").trim(),
+    title: String(variant?.title ?? "").trim(),
+    label: buildVariantLabel(variant, categoryConfig),
+    price: Number(variant?.price ?? 0),
+    oldPrice: Number(variant?.oldPrice ?? 0),
+    stock: Math.max(0, Number(variant?.stock ?? 0)),
+    image: String(variant?.image ?? "").trim(),
+    optionValues,
+    attributes,
+    isDefault: Boolean(variant?.isDefault),
+    sortOrder: Number(variant?.sortOrder ?? 0),
+  };
+}
+
+function buildProductImageList(product, thumbnail) {
+  const images = Array.isArray(product?.images)
+    ? product.images
+    : Array.isArray(product?.gallery)
+      ? product.gallery
+      : [];
+  const normalizedImages = images
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean);
+
+  if (thumbnail && !normalizedImages.includes(thumbnail)) {
+    return [thumbnail, ...normalizedImages];
+  }
+
+  return normalizedImages;
+}
+
+function deriveVendorEmail(product) {
+  const explicitVendorEmail = normalizeEmail(
+    product?.vendorEmail ?? product?.shopEmail,
+  );
+
+  if (explicitVendorEmail) {
+    return explicitVendorEmail;
+  }
+
+  const currentUser = readCurrentUser();
+  const currentUserId = String(currentUser?.id ?? "").trim();
+  const productVendorId = String(
+    product?.vendorId ?? product?.vendor?._id ?? "",
+  ).trim();
+
+  if (
+    currentUser?.email &&
+    currentUserId &&
+    productVendorId === currentUserId
+  ) {
+    return normalizeEmail(currentUser.email);
+  }
+
+  return "";
+}
+
 function resolveProductsSnapshot(dataItem) {
   if (Array.isArray(dataItem?.products)) {
     return {
@@ -169,22 +314,112 @@ function normalizeProduct(product) {
   const normalizedTitle = normalizeSearchText(product?.title);
   const resolvedSpecialCategory =
     normalizedTitle === PIKACHU_PRODUCT_TITLE ? "others" : resolvedCategory;
+  const categoryConfig = normalizeCategoryConfig(
+    product?.categoryConfig,
+    resolvedSpecialCategory,
+  );
+  const variants = Array.isArray(product?.variants)
+    ? product.variants.map((variant) =>
+        normalizeVariant(variant, categoryConfig),
+      )
+    : [];
+  const defaultVariant =
+    variants.find((variant) => variant.isDefault) ?? variants[0] ?? null;
+  const thumbnail = String(
+    product?.thumbnail ??
+      product?.image ??
+      defaultVariant?.image ??
+      product?.gallery?.[0] ??
+      product?.images?.[0] ??
+      "",
+  ).trim();
+  const images = buildProductImageList(product, thumbnail);
+  const vendorEmail = deriveVendorEmail(product);
+  const oldPrice =
+    variants.length > 0
+      ? Math.max(
+          ...variants.map((variant) => Number(variant?.oldPrice ?? 0)),
+          0,
+        )
+      : Number(product?.oldPrice ?? 0);
+  const price =
+    variants.length > 0
+      ? Math.min(...variants.map((variant) => Number(variant?.price ?? 0)))
+      : Number(product?.price ?? 0);
+  const derivedColors = [
+    ...new Set(
+      variants
+        .map((variant) => String(variant?.optionValues?.color ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  const derivedSizes = [
+    ...new Set(
+      variants
+        .map((variant) => String(variant?.optionValues?.size ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  const resolvedStock =
+    variants.length > 0
+      ? variants.reduce((sum, variant) => sum + Number(variant?.stock ?? 0), 0)
+      : stock;
+  const discountPercentage =
+    oldPrice > price && oldPrice > 0
+      ? Math.round(((oldPrice - price) / oldPrice) * 100)
+      : Number(product?.discountPercentage ?? 0);
 
   const normalizedProduct = {
     ...product,
+    id: String(product?.id ?? product?._id ?? "").trim(),
     category: resolvedSpecialCategory,
+    vendorId: String(product?.vendorId ?? product?.vendor?._id ?? "").trim(),
+    shopId: String(product?.shopId ?? product?.shop?._id ?? "").trim(),
+    vendorEmail,
     shopName:
       product?.shopName ||
-      (product?.vendorEmail
-        ? String(product.vendorEmail).split("@")[0]
-        : "L&S Store"),
+      product?.shop?.name ||
+      (vendorEmail ? String(vendorEmail).split("@")[0] : "L&S Store"),
+    image: thumbnail,
+    thumbnail,
+    images,
+    gallery: images,
+    colors:
+      derivedColors.length > 0
+        ? derivedColors
+        : Array.isArray(product?.colors)
+          ? product.colors
+          : [],
+    sizes:
+      derivedSizes.length > 0
+        ? derivedSizes
+        : Array.isArray(product?.sizes)
+          ? product.sizes
+          : [],
+    attributes:
+      product?.attributes && typeof product.attributes === "object"
+        ? product.attributes
+        : {},
+    categoryName: String(
+      product?.categoryName ?? categoryConfig?.name ?? "",
+    ).trim(),
+    categoryConfig,
+    variants,
+    defaultVariant,
+    defaultVariantId: String(
+      product?.defaultVariantId ?? defaultVariant?.id ?? "",
+    ).trim(),
+    variantCount: Number(product?.variantCount ?? variants.length),
     rating: Number(averageRating.toFixed(1)),
     reviews: reviewsData.length,
     reviewsData,
-    stock: stock <= 0 ? 0 : stock,
+    stock: resolvedStock <= 0 ? 0 : resolvedStock,
+    price,
+    oldPrice,
+    discountPercentage,
   };
 
-  if (stock <= 0) {
+  if (resolvedStock <= 0) {
     if (
       [
         PRODUCT_STATUS.PENDING,
@@ -210,7 +445,7 @@ function normalizeProduct(product) {
   };
 }
 
-function hasShopAggregationImpact(currentProduct, nextProduct) {
+function _hasShopAggregationImpact(currentProduct, nextProduct) {
   const currentVendorEmail = String(currentProduct?.vendorEmail ?? "")
     .trim()
     .toLowerCase();
@@ -263,81 +498,48 @@ async function persistProducts(nextProducts, snapshot, options) {
 }
 
 export const getAllProducts = async () => {
-  const { products } = await fetchProductsSnapshot();
+  const roles = Array.isArray(readCurrentUser()?.roles)
+    ? readCurrentUser().roles
+    : [];
+
+  if (roles.includes("admin")) {
+    const products = await getAdminProductsService();
+    return products.map(normalizeProduct);
+  }
+
+  if (roles.includes("vendor")) {
+    const products = await getProductsByVendorIdService();
+    return products.map(normalizeProduct);
+  }
+
+  const products = await getProductsService();
   return products.map(normalizeProduct);
 };
 
 export const getProducts = async () => {
-  const products = await getAllProducts();
-  return products.filter((product) =>
-    [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.OUT_OF_STOCK].includes(
-      product.status,
-    ),
-  );
+  const products = await getProductsService();
+  return products.map(normalizeProduct);
+};
+
+export const getProductById = async (productId) => {
+  const product = await getProductByIdService(productId);
+  return product ? normalizeProduct(product) : null;
 };
 
 export const createProduct = async (payload) => {
-  const snapshot = await fetchProductsSnapshot();
-  const { products } = snapshot;
-
-  const nextProduct = normalizeProduct({
+  const nextProduct = await createVendorProductService(payload);
+  return normalizeProduct({
     ...payload,
-    id: payload?.id ?? `prod-${Date.now()}`,
-    category: normalizeCategory(payload?.category),
-    status: PRODUCT_STATUS.PENDING,
-    reason: null,
-    shopName:
-      payload?.shopName ||
-      (payload?.vendorEmail
-        ? String(payload.vendorEmail).split("@")[0]
-        : "My Shop"),
-    reviewsData: Array.isArray(payload?.reviewsData) ? payload.reviewsData : [],
-    createdAt: payload?.createdAt ?? new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    ...nextProduct,
   });
-
-  await persistProducts([...products, nextProduct], snapshot);
-  return nextProduct;
 };
 
 export const updateProductById = async ({ id, updates }) => {
-  const normalizedId = String(id ?? "").trim();
-
-  if (!normalizedId) {
-    throw new Error("Missing product id.");
-  }
-
-  const snapshot = await fetchProductsSnapshot();
-  const { products } = snapshot;
-  let updatedProduct = null;
-  let shouldSyncShops = false;
-  const updatedAt = new Date().toISOString();
-
-  const nextProducts = products.map((product) => {
-    if (String(product?.id) !== normalizedId) {
-      return product;
-    }
-
-    const nextItem = normalizeProduct({
-      ...product,
-      ...updates,
-      updatedAt,
-    });
-
-    updatedProduct = nextItem;
-    shouldSyncShops = hasShopAggregationImpact(product, nextItem);
-    return nextItem;
+  const nextProduct = await updateProductByIdService(id, updates);
+  return normalizeProduct({
+    ...updates,
+    ...nextProduct,
   });
-
-  if (!updatedProduct) {
-    throw new Error("Product not found.");
-  }
-
-  await persistProducts(nextProducts, snapshot, {
-    syncShops: shouldSyncShops,
-  });
-
-  return updatedProduct;
 };
 
 export const deductProductStocksForCheckout = async ({ items }) => {
@@ -347,7 +549,10 @@ export const deductProductStocksForCheckout = async ({ items }) => {
     throw new Error("Cart is empty.");
   }
 
-  const deductions = new Map();
+  const products = await getProducts();
+  const productById = new Map(
+    products.map((product) => [String(product?.id ?? "").trim(), product]),
+  );
 
   cartItems.forEach((item) => {
     const productId = String(item?.productId ?? item?.id ?? "").trim();
@@ -357,19 +562,6 @@ export const deductProductStocksForCheckout = async ({ items }) => {
       throw new Error("Dữ liệu giỏ hàng không hợp lệ. Vui lòng thử lại.");
     }
 
-    deductions.set(
-      productId,
-      Number(deductions.get(productId) ?? 0) + quantityToDeduct,
-    );
-  });
-
-  const snapshot = await fetchProductsSnapshot();
-  const { products } = snapshot;
-  const productById = new Map(
-    products.map((product) => [String(product?.id ?? "").trim(), product]),
-  );
-
-  for (const [productId, quantityToDeduct] of deductions) {
     const currentProduct = productById.get(productId);
 
     if (!currentProduct) {
@@ -378,59 +570,18 @@ export const deductProductStocksForCheckout = async ({ items }) => {
       );
     }
 
-    const currentStock = Number(currentProduct?.stock ?? 0);
-
-    if (currentStock < quantityToDeduct) {
+    if (Number(currentProduct?.stock ?? 0) < quantityToDeduct) {
       throw new Error(
-        `Sản phẩm ${productId} chỉ còn ${currentStock} sản phẩm trong kho.`,
+        `Sản phẩm ${currentProduct.title || productId} không đủ tồn kho.`,
       );
     }
-  }
-
-  const updatedAt = new Date().toISOString();
-  let shouldSyncShops = false;
-  const nextProducts = products.map((product) => {
-    const productId = String(product?.id ?? "").trim();
-    const quantityToDeduct = deductions.get(productId);
-
-    if (!quantityToDeduct) {
-      return product;
-    }
-
-    const currentStock = Number(product?.stock ?? 0);
-    const nextStock = currentStock - quantityToDeduct;
-
-    if (currentStock > 0 && nextStock <= 0) {
-      shouldSyncShops = true;
-    }
-
-    return normalizeProduct({
-      ...product,
-      stock: nextStock,
-      updatedAt,
-    });
   });
 
-  await writeProductsSnapshot(snapshot, nextProducts, {
-    syncShops: shouldSyncShops,
-  });
-  return nextProducts;
+  return products;
 };
 
 export const removeProductById = async (id) => {
-  const normalizedId = String(id ?? "").trim();
-
-  if (!normalizedId) {
-    throw new Error("Missing product id.");
-  }
-
-  const snapshot = await fetchProductsSnapshot();
-  const { products } = snapshot;
-  const nextProducts = products.filter(
-    (product) => String(product?.id) !== normalizedId,
-  );
-
-  await persistProducts(nextProducts, snapshot);
+  await deleteProductByIdService(id);
 };
 
 export const addProductReview = async ({ productId, review }) => {

@@ -6,8 +6,10 @@ import {
   formatProductCategoryLabel,
   updateProductById,
 } from "../../api/productApi";
+import { getMyShop, updateMyShop } from "../../api/shopsApi";
 import { useAdminProductsQuery } from "../../hooks/useAdminProductsQuery";
 import { useAuth } from "../../hooks/useAuth";
+import { isProductOwnedByVendor } from "./vendorDataUtils";
 import "./VendorDashboard.css";
 
 const ITEMS_PER_PAGE = 10;
@@ -29,20 +31,27 @@ export default function VendorProfile() {
     phone: "",
     address: "",
     bio: "",
+    shopDescription: "",
+    shopLogo: "",
+    shopBanner: "",
   });
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [shopLogoFile, setShopLogoFile] = useState(null);
+  const [shopBannerFile, setShopBannerFile] = useState(null);
+  const [shouldRemoveAvatar, setShouldRemoveAvatar] = useState(false);
+  const [shouldRemoveLogo, setShouldRemoveLogo] = useState(false);
+  const [shouldRemoveBanner, setShouldRemoveBanner] = useState(false);
 
   const vendorEmail = String(user?.email ?? "")
     .trim()
     .toLowerCase();
+  const vendorId = String(user?.id ?? "").trim();
 
   const vendorProducts = useMemo(() => {
-    return products.filter((product) => {
-      const owner = String(product?.vendorEmail ?? "")
-        .trim()
-        .toLowerCase();
-      return owner === vendorEmail;
-    });
-  }, [products, vendorEmail]);
+    return products.filter((product) =>
+      isProductOwnedByVendor(product, vendorEmail, vendorId),
+    );
+  }, [products, vendorEmail, vendorId]);
 
   const stockStats = useMemo(() => {
     const inStock = vendorProducts.filter(
@@ -65,15 +74,49 @@ export default function VendorProfile() {
   const totalPages = Math.ceil(vendorProducts.length / ITEMS_PER_PAGE);
 
   useEffect(() => {
-    setProfileForm({
+    setProfileForm((previous) => ({
+      ...previous,
       name: user?.name ?? "",
-      shopName: user?.shopName ?? user?.name ?? "",
+      shopName: user?.shopName ?? previous.shopName ?? user?.name ?? "",
       avatarUrl: user?.avatarUrl ?? "",
       phone: user?.phone ?? "",
-      address: user?.address ?? "",
+      address: user?.address ?? previous.address ?? "",
       bio: user?.bio ?? "",
-    });
+    }));
   }, [user]);
+
+  useEffect(() => {
+    let isSubscribed = true;
+
+    async function loadMyShop() {
+      try {
+        const shop = await getMyShop();
+
+        if (!isSubscribed || !shop) {
+          return;
+        }
+
+        setProfileForm((previous) => ({
+          ...previous,
+          shopName: shop?.name ?? previous.shopName,
+          shopDescription: shop?.description ?? "",
+          shopLogo: shop?.logo ?? "",
+          shopBanner: shop?.banner ?? "",
+          address: shop?.address?.addressLine1 || previous.address,
+        }));
+      } catch {
+        return;
+      }
+    }
+
+    if (vendorId) {
+      void loadMyShop();
+    }
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [vendorId]);
 
   useEffect(() => {
     if (currentPage <= totalPages) {
@@ -101,27 +144,42 @@ export default function VendorProfile() {
         name: profileForm.name,
         shopName: profileForm.shopName,
         avatarUrl: profileForm.avatarUrl,
+        avatarFile,
+        removeAvatar: shouldRemoveAvatar,
         phone: profileForm.phone,
         address: profileForm.address,
         bio: profileForm.bio,
       });
 
-      const normalizedShopName = String(profileForm.shopName ?? "").trim();
+      await updateMyShop({
+        name: profileForm.shopName,
+        description: profileForm.shopDescription,
+        logo: profileForm.shopLogo,
+        banner: profileForm.shopBanner,
+        logoFile: shopLogoFile,
+        bannerFile: shopBannerFile,
+        removeLogo: shouldRemoveLogo,
+        removeBanner: shouldRemoveBanner,
+        contactEmail: user?.email ?? "",
+        phone: profileForm.phone,
+        address: {
+          addressLine1: profileForm.address,
+          city: "",
+          state: "",
+          zipCode: "",
+          country: "",
+        },
+      });
 
-      if (normalizedShopName) {
-        await Promise.all(
-          vendorProducts.map((product) =>
-            updateProductById({
-              id: product.id,
-              updates: {
-                shopName: normalizedShopName,
-              },
-            }),
-          ),
-        );
-      }
+      setAvatarFile(null);
+      setShopLogoFile(null);
+      setShopBannerFile(null);
+      setShouldRemoveAvatar(false);
+      setShouldRemoveLogo(false);
+      setShouldRemoveBanner(false);
 
       await queryClient.invalidateQueries({ queryKey: ["users"] });
+      await queryClient.invalidateQueries({ queryKey: ["shops"] });
       await queryClient.invalidateQueries({ queryKey: ["products", "admin"] });
       await queryClient.invalidateQueries({ queryKey: ["products", "public"] });
       window.alert("Cap nhat profile shop thanh cong.");
@@ -177,7 +235,7 @@ export default function VendorProfile() {
       <section className="vendor-section-card">
         <div className="vendor-section-card__header">
           <h2>Shop profile settings</h2>
-          <span>Cap nhat ten shop va avatar</span>
+          <span>Cap nhat tai khoan, avatar, shop logo va banner</span>
         </div>
 
         <form className="vendor-profile-form" onSubmit={handleSaveProfile}>
@@ -213,6 +271,33 @@ export default function VendorProfile() {
             />
           </label>
           <label>
+            Avatar file
+            <input
+              className="vendor-inline-input"
+              type="file"
+              accept="image/*"
+              onChange={(event) => {
+                setAvatarFile(event.target.files?.[0] ?? null);
+                setShouldRemoveAvatar(false);
+              }}
+            />
+          </label>
+          <label>
+            Remove avatar
+            <input
+              type="checkbox"
+              checked={shouldRemoveAvatar}
+              onChange={(event) => {
+                const isChecked = event.target.checked;
+                setShouldRemoveAvatar(isChecked);
+
+                if (isChecked) {
+                  setAvatarFile(null);
+                }
+              }}
+            />
+          </label>
+          <label>
             Phone
             <input
               className="vendor-inline-input"
@@ -220,6 +305,92 @@ export default function VendorProfile() {
               name="phone"
               value={profileForm.phone}
               onChange={handleProfileChange}
+            />
+          </label>
+          <label className="vendor-profile-form__full">
+            Shop description
+            <textarea
+              className="vendor-inline-input"
+              rows="3"
+              name="shopDescription"
+              value={profileForm.shopDescription}
+              onChange={handleProfileChange}
+            />
+          </label>
+          <label>
+            Shop logo URL
+            <input
+              className="vendor-inline-input"
+              type="text"
+              name="shopLogo"
+              value={profileForm.shopLogo}
+              onChange={handleProfileChange}
+              placeholder="https://..."
+            />
+          </label>
+          <label>
+            Shop logo file
+            <input
+              className="vendor-inline-input"
+              type="file"
+              accept="image/*"
+              onChange={(event) => {
+                setShopLogoFile(event.target.files?.[0] ?? null);
+                setShouldRemoveLogo(false);
+              }}
+            />
+          </label>
+          <label>
+            Remove logo
+            <input
+              type="checkbox"
+              checked={shouldRemoveLogo}
+              onChange={(event) => {
+                const isChecked = event.target.checked;
+                setShouldRemoveLogo(isChecked);
+
+                if (isChecked) {
+                  setShopLogoFile(null);
+                }
+              }}
+            />
+          </label>
+          <label>
+            Shop banner URL
+            <input
+              className="vendor-inline-input"
+              type="text"
+              name="shopBanner"
+              value={profileForm.shopBanner}
+              onChange={handleProfileChange}
+              placeholder="https://..."
+            />
+          </label>
+          <label>
+            Shop banner file
+            <input
+              className="vendor-inline-input"
+              type="file"
+              accept="image/*"
+              onChange={(event) => {
+                setShopBannerFile(event.target.files?.[0] ?? null);
+                setShouldRemoveBanner(false);
+              }}
+            />
+          </label>
+          <label>
+            Remove banner
+            <input
+              type="checkbox"
+              checked={shouldRemoveBanner}
+              onChange={(event) => {
+                const isChecked = event.target.checked;
+                setShouldRemoveBanner(isChecked);
+
+                if (isChecked) {
+                  setShopBannerFile(null);
+                }
+              }}
             />
           </label>
           <label className="vendor-profile-form__full">

@@ -5,7 +5,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../hooks/useAuth";
 import { useCart } from "../../hooks/useCart";
 import { createOrder } from "../../api/ordersApi";
-import { deductProductStocksForCheckout } from "../../api/productApi";
 import "./Checkout.css";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -133,6 +132,8 @@ function Checkout() {
 
     const orderItems = items.map((item) => ({
       productId: String(item?.productId ?? ""),
+      variantId: String(item?.variantId ?? ""),
+      variantLabel: String(item?.variantLabel ?? "").trim(),
       title: item?.title ?? "Product",
       image: item?.image ?? "/favicon.svg",
       quantity: Number(item?.quantity ?? 0),
@@ -141,6 +142,7 @@ function Checkout() {
         .trim()
         .toLowerCase(),
       shopName: item?.shopName ?? "Shop",
+      sku: item?.sku ?? "",
       color: item?.color ?? "Default",
       size: item?.size ?? "M",
     }));
@@ -148,8 +150,6 @@ function Checkout() {
     setIsSubmitting(true);
 
     try {
-      await deductProductStocksForCheckout({ items });
-
       await createOrder({
         customerEmail: normalizedCustomerEmail,
         customerName:
@@ -365,7 +365,7 @@ function Checkout() {
                     <div className="checkout-product-item__content">
                       <h4>{item.title}</h4>
                       <small>
-                        {item.size} / {item.color}
+                        {item.variantLabel || `${item.size} / ${item.color}`}
                       </small>
                     </div>
                     <strong>

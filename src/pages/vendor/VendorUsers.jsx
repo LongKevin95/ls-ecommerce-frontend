@@ -7,6 +7,7 @@ import { useUsersQuery } from "../../hooks/useUsersQuery";
 import {
   extractVendorOrderItems,
   isOrderOfVendor,
+  isProductOwnedByVendor,
   resolveOrderCustomer,
   resolveOrderDate,
   resolveVendorSubtotal,
@@ -61,15 +62,13 @@ export default function VendorUsers() {
   const vendorEmail = String(user?.email ?? "")
     .trim()
     .toLowerCase();
+  const vendorId = String(user?.id ?? "").trim();
 
   const vendorProducts = useMemo(() => {
-    return products.filter((product) => {
-      const productOwner = String(product?.vendorEmail ?? "")
-        .trim()
-        .toLowerCase();
-      return productOwner === vendorEmail;
-    });
-  }, [products, vendorEmail]);
+    return products.filter((product) =>
+      isProductOwnedByVendor(product, vendorEmail, vendorId),
+    );
+  }, [products, vendorEmail, vendorId]);
 
   const vendorProductIds = useMemo(
     () =>

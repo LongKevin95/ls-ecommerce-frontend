@@ -1,0 +1,270 @@
+:root {
+  --clean-primary: #db4444;
+  --clean-bg: #f7f7f8;
+  --clean-surface: #ffffff;
+  --clean-text: #111827;
+  --clean-muted: #6b7280;
+  --clean-border: #e5e7eb;
+  --clean-success: #166534;
+}
+
+.clean-shell {
+  min-height: 100vh;
+  background: var(--clean-bg);
+  color: var(--clean-text);
+}
+
+.clean-container {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+}
+
+.clean-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--clean-border);
+}
+
+.clean-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 0;
+}
+
+.clean-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+}
+
+.clean-brand img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.clean-brand small,
+.clean-muted,
+.clean-page__lead,
+.clean-user-chip small,
+.clean-breadcrumb {
+  color: var(--clean-muted);
+}
+
+.clean-nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.clean-nav a,
+.clean-link-btn {
+  text-decoration: none;
+  color: inherit;
+}
+
+.clean-nav a.active {
+  color: var(--clean-primary);
+  font-weight: 600;
+}
+
+.clean-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.clean-user-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.clean-main {
+  padding: 32px 0 56px;
+}
+
+.clean-page {
+  display: grid;
+  gap: 24px;
+}
+
+.clean-page__header {
+  display: grid;
+  gap: 8px;
+}
+
+.clean-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.clean-card,
+.clean-panel,
+.clean-summary,
+.clean-list-item {
+  background: var(--clean-surface);
+  border: 1px solid var(--clean-border);
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.clean-card {
+  overflow: hidden;
+}
+
+.clean-card__media {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  background: #f3f4f6;
+}
+
+.clean-card__body,
+.clean-panel,
+.clean-summary,
+.clean-list-item {
+  padding: 20px;
+}
+
+.clean-card__body {
+  display: grid;
+  gap: 12px;
+}
+
+.clean-card__meta,
+.clean-card__actions,
+.clean-flex,
+.clean-cart-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.clean-card__meta,
+.clean-cart-row {
+  justify-content: space-between;
+}
+
+.clean-card__actions {
+  flex-wrap: wrap;
+}
+
+.clean-badge {
+  width: fit-content;
+  border-radius: 999px;
+  background: rgba(219, 68, 68, 0.08);
+  color: var(--clean-primary);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.clean-button,
+.clean-link-btn {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 16px;
+  background: var(--clean-primary);
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.clean-button--ghost {
+  background: transparent;
+  color: var(--clean-text);
+  border: 1px solid var(--clean-border);
+}
+
+.clean-form {
+  display: grid;
+  gap: 16px;
+}
+
+.clean-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.clean-form label {
+  display: grid;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.clean-form input,
+.clean-form textarea,
+.clean-form select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--clean-border);
+  background: #fff;
+  font: inherit;
+}
+
+.clean-form textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.clean-inline-message {
+  color: var(--clean-success);
+  font-weight: 600;
+}
+
+.clean-empty {
+  padding: 28px;
+  text-align: center;
+  background: var(--clean-surface);
+  border-radius: 20px;
+  border: 1px dashed var(--clean-border);
+}
+
+.clean-checkout-layout {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 20px;
+}
+
+.clean-summary ul,
+.clean-list {
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.clean-summary li,
+.clean-list-item {
+  display: grid;
+  gap: 10px;
+}
+
+.clean-footer {
+  border-top: 1px solid var(--clean-border);
+  padding: 20px 0 36px;
+  background: #fff;
+}
+
+@media (max-width: 860px) {
+  .clean-header__inner,
+  .clean-header__actions {
+    flex-wrap: wrap;
+  }
+
+  .clean-form__grid,
+  .clean-checkout-layout {
+    grid-template-columns: 1fr;
+  }
+}

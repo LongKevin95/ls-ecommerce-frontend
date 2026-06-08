@@ -2,8 +2,8 @@ import { memo, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import { formatProductCategoryLabel } from "../../api/productApi";
+import { useShopsQuery } from "../../hooks/useShopsQuery";
 import { useProductsQuery } from "../../hooks/useProductsQuery";
-import { useUsersQuery } from "../../hooks/useUsersQuery";
 import "./Shop.css";
 
 const SHOPS_SNAPSHOT_KEY = "ls-shops-vendors-snapshot";
@@ -52,18 +52,6 @@ function normalizeCategory(value) {
     .toLowerCase();
 }
 
-function resolveUserRoles(user) {
-  if (Array.isArray(user?.roles)) {
-    return user.roles;
-  }
-
-  if (user?.role) {
-    return [user.role];
-  }
-
-  return [];
-}
-
 const ShopCard = memo(({ vendor }) => {
   return (
     <article className="shop-card">
@@ -105,7 +93,7 @@ const ShopCard = memo(({ vendor }) => {
       </small>
       <Link
         className="shop-card__action"
-        to={`/shops/${encodeURIComponent(vendor.email)}`}
+        to={`/shops/${encodeURIComponent(vendor.id)}`}
       >
         View shop
       </Link>
@@ -150,11 +138,11 @@ export default function ShopDirectory() {
   );
 
   const {
-    data: usersData,
-    isLoading: isUsersLoading,
-    isError: isUsersError,
-    error: usersError,
-  } = useUsersQuery();
+    data: shopsData,
+    isLoading: isShopsLoading,
+    isError: isShopsError,
+    error: shopsError,
+  } = useShopsQuery();
   const {
     data: productsData,
     isLoading: isProductsLoading,
@@ -162,30 +150,30 @@ export default function ShopDirectory() {
     error: productsError,
   } = useProductsQuery();
 
-  const users = useMemo(
-    () => (Array.isArray(usersData) ? usersData : []),
-    [usersData],
+  const shops = useMemo(
+    () => (Array.isArray(shopsData) ? shopsData : []),
+    [shopsData],
   );
   const products = useMemo(
     () => (Array.isArray(productsData) ? productsData : []),
     [productsData],
   );
   const hasFreshData = useMemo(
-    () => Array.isArray(usersData) && Array.isArray(productsData),
-    [usersData, productsData],
+    () => Array.isArray(shopsData) && Array.isArray(productsData),
+    [shopsData, productsData],
   );
 
-  const productSummaryByVendor = useMemo(() => {
+  const productSummaryByShop = useMemo(() => {
     const summaryMap = new Map();
 
     products.forEach((product) => {
-      const vendorEmail = normalizeEmail(product?.vendorEmail);
+      const shopId = String(product?.shopId ?? "").trim();
 
-      if (!vendorEmail) {
+      if (!shopId) {
         return;
       }
 
-      const currentSummary = summaryMap.get(vendorEmail) ?? {
+      const currentSummary = summaryMap.get(shopId) ?? {
         totalProducts: 0,
         categories: new Set(),
       };
@@ -197,20 +185,21 @@ export default function ShopDirectory() {
         currentSummary.categories.add(category);
       }
 
-      summaryMap.set(vendorEmail, currentSummary);
+      summaryMap.set(shopId, currentSummary);
     });
 
     return summaryMap;
   }, [products]);
 
   const liveVendorRows = useMemo(() => {
-    return users
+    return shops
       .map((item) => {
-        const roles = resolveUserRoles(item);
+        const shopId = String(item?.id ?? "").trim();
         const email = normalizeEmail(item?.email);
-        const productSummary = productSummaryByVendor.get(email);
+        const productSummary = productSummaryByShop.get(shopId);
 
         return {
+          id: shopId,
           name: item?.name ?? (email ? email.split("@")[0] : "Vendor"),
           shopName:
             item?.shopName ||
@@ -218,15 +207,21 @@ export default function ShopDirectory() {
             (email ? email.split("@")[0] : "Vendor Shop"),
           avatarUrl: String(item?.avatarUrl ?? "").trim(),
           email,
-          roles,
           totalProducts: productSummary?.totalProducts ?? 0,
-          categories: Array.from(productSummary?.categories ?? []).map(
-            (category) => formatProductCategoryLabel(category),
-          ),
+          categories:
+            productSummary?.categories && productSummary.categories.size > 0
+              ? Array.from(productSummary.categories).map((category) =>
+                  formatProductCategoryLabel(category),
+                )
+              : Array.isArray(item?.categories)
+                ? item.categories.map((category) =>
+                    formatProductCategoryLabel(category),
+                  )
+                : [],
         };
       })
-      .filter((item) => item.email && item.roles.includes("vendor"));
-  }, [users, productSummaryByVendor]);
+      .filter((item) => item.id);
+  }, [productSummaryByShop, shops]);
 
   useEffect(() => {
     if (!hasFreshData) {
@@ -238,17 +233,17 @@ export default function ShopDirectory() {
 
   const vendorRows = hasFreshData ? liveVendorRows : storedVendorRows;
   const hasSnapshotRows = storedVendorRows.length > 0;
-  const isPageLoading = !hasFreshData && (isUsersLoading || isProductsLoading);
+  const isPageLoading = !hasFreshData && (isShopsLoading || isProductsLoading);
   const shouldShowSkeletons = isPageLoading && !hasSnapshotRows;
   const shouldShowError =
-    !vendorRows.length && !isPageLoading && (isUsersError || isProductsError);
+    !vendorRows.length && !isPageLoading && (isShopsError || isProductsError);
   const shouldShowEmpty =
-    !vendorRows.length && !isPageLoading && !isUsersError && !isProductsError;
+    !vendorRows.length && !isPageLoading && !isShopsError && !isProductsError;
   const headerCountLabel = shouldShowSkeletons
     ? "..."
     : `${vendorRows.length} vendors`;
   const errorMessage =
-    usersError?.message ??
+    shopsError?.message ??
     productsError?.message ??
     "Khong the tai danh sach shop.";
 
@@ -274,7 +269,7 @@ export default function ShopDirectory() {
           className={`shop-grid ${shouldShowSkeletons ? "shop-grid--loading" : ""}`}
         >
           {vendorRows.map((vendor) => (
-            <ShopCard key={vendor.email} vendor={vendor} />
+            <ShopCard key={vendor.id ?? vendor.email} vendor={vendor} />
           ))}
           {shouldShowSkeletons
             ? Array.from({ length: 6 }).map((_, index) => (

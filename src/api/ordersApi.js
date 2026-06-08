@@ -1,4 +1,17 @@
 import { fetchResourceDocument, updateResourceData } from "./resourceApi";
+import {
+  createOrder as createOrderService,
+  getAllOrders as getAllOrdersService,
+  getOrdersByCustomerId as getOrdersByCustomerIdService,
+  getVendorOrders as getVendorOrdersService,
+  updateOrderStatus as updateOrderStatusService,
+} from "../services/orderService";
+import {
+  getAdminProducts as getAdminProductsService,
+  getProducts as getProductsService,
+  getProductsByVendorId as getProductsByVendorIdService,
+} from "../services/productService";
+import { readAuthSession } from "../utils/authStorage";
 
 const ORDERS_RESOURCE_NAME = "ecommerce-data";
 
@@ -11,6 +24,88 @@ function normalizeText(value, fallback = "") {
 
 function normalizeEmail(value) {
   return normalizeText(value).toLowerCase();
+}
+
+function getCurrentRoles() {
+  return Array.isArray(readAuthSession()?.user?.roles)
+    ? readAuthSession().user.roles
+    : [];
+}
+
+function buildProductById(products) {
+  return new Map(
+    (Array.isArray(products) ? products : []).map((product) => [
+      normalizeText(product?.id ?? product?._id ?? ""),
+      product,
+    ]),
+  );
+}
+
+function enrichOrderWithProducts(order, productById, fallbackItems = []) {
+  const orderItems = Array.isArray(order?.items) ? order.items : [];
+  const fallbackItemByProductId = new Map(
+    (Array.isArray(fallbackItems) ? fallbackItems : []).map((item) => [
+      normalizeText(item?.productId ?? item?.id ?? ""),
+      item,
+    ]),
+  );
+
+  const nextItems = orderItems.map((item) => {
+    const productId = normalizeText(item?.productId ?? item?.id ?? "");
+    const matchedProduct = productById.get(productId);
+    const fallbackItem = fallbackItemByProductId.get(productId);
+
+    return {
+      ...matchedProduct,
+      ...fallbackItem,
+      ...item,
+      productId,
+      title:
+        item?.title ??
+        fallbackItem?.title ??
+        matchedProduct?.title ??
+        "Product",
+      image:
+        item?.image ??
+        fallbackItem?.image ??
+        matchedProduct?.image ??
+        matchedProduct?.thumbnail ??
+        "/favicon.svg",
+      price: Number(
+        item?.price ?? fallbackItem?.price ?? matchedProduct?.price ?? 0,
+      ),
+      vendorEmail: normalizeEmail(
+        item?.vendorEmail ??
+          fallbackItem?.vendorEmail ??
+          matchedProduct?.vendorEmail ??
+          "",
+      ),
+      shopName: normalizeText(
+        item?.shopName ??
+          fallbackItem?.shopName ??
+          matchedProduct?.shopName ??
+          "Shop",
+        "Shop",
+      ),
+    };
+  });
+
+  return {
+    ...order,
+    items: nextItems,
+  };
+}
+
+async function getProductsForOrderEnrichment(roles) {
+  if (roles.includes("admin")) {
+    return getAdminProductsService();
+  }
+
+  if (roles.includes("vendor")) {
+    return getProductsByVendorIdService();
+  }
+
+  return getProductsService();
 }
 
 function normalizeOrderStatusValue(status) {
@@ -117,7 +212,7 @@ function normalizeStatusHistory(order, status) {
   return buildInitialStatusHistory(order, status);
 }
 
-function validateStatusTransition(currentStatus, nextStatus) {
+function _validateStatusTransition(currentStatus, nextStatus) {
   if (!nextStatus || currentStatus === nextStatus) {
     return;
   }
@@ -136,7 +231,7 @@ function validateStatusTransition(currentStatus, nextStatus) {
   }
 }
 
-function appendStatusHistory(order, nextStatus, actor, updatedAt) {
+function _appendStatusHistory(order, nextStatus, actor, updatedAt) {
   const currentStatus = normalizeOrderStatusValue(order?.status);
 
   if (!nextStatus || currentStatus === nextStatus) {
@@ -197,7 +292,11 @@ async function fetchOrdersSnapshot() {
 }
 
 function normalizeOrder(order) {
-  const items = Array.isArray(order?.items) ? order.items : [];
+  const items = Array.isArray(order?.items)
+    ? order.items
+    : Array.isArray(order?.vendorItems)
+      ? order.vendorItems
+      : [];
   const normalizedStatus = normalizeOrderStatusValue(order?.status);
   const shippingAddress = normalizeShippingAddress(
     order?.shippingAddress,
@@ -215,7 +314,7 @@ function normalizeOrder(order) {
   );
 
   return {
-    id: String(order?.id ?? `o-${Date.now()}`),
+    id: String(order?.id ?? order?._id ?? `o-${Date.now()}`),
     customerEmail,
     customerName,
     contactEmail,
@@ -225,6 +324,8 @@ function normalizeOrder(order) {
     status: normalizedStatus || "pending",
     items: items.map((item) => ({
       productId: normalizeText(item?.productId ?? item?.id ?? ""),
+      variantId: normalizeText(item?.variantId ?? ""),
+      variantLabel: normalizeText(item?.variantLabel ?? ""),
       title: normalizeText(item?.title ?? "Product", "Product"),
       image: normalizeText(item?.image ?? "/favicon.svg", "/favicon.svg"),
       quantity: Number(item?.quantity ?? 0),
@@ -252,7 +353,7 @@ function normalizeOrder(order) {
   };
 }
 
-async function persistOrders(nextOrders, snapshot) {
+async function _persistOrders(nextOrders, snapshot) {
   const resolvedSnapshot = snapshot ?? (await fetchOrdersSnapshot());
   const { payload, dataId } = resolvedSnapshot;
 
@@ -267,101 +368,84 @@ async function persistOrders(nextOrders, snapshot) {
 }
 
 export const getOrders = async () => {
-  const { orders } = await fetchOrdersSnapshot();
-  return orders.map(normalizeOrder);
+  const roles = getCurrentRoles();
+  const products = await getProductsForOrderEnrichment(roles).catch(() => []);
+  const productById = buildProductById(products);
+
+  if (roles.includes("admin")) {
+    const orders = await getAllOrdersService();
+    return orders.map((order) =>
+      normalizeOrder(enrichOrderWithProducts(order, productById)),
+    );
+  }
+
+  if (roles.includes("vendor")) {
+    const orders = await getVendorOrdersService();
+    return orders.map((order) =>
+      normalizeOrder(enrichOrderWithProducts(order, productById)),
+    );
+  }
+
+  if (roles.includes("customer")) {
+    const orders = await getOrdersByCustomerIdService();
+    return orders.map((order) =>
+      normalizeOrder(enrichOrderWithProducts(order, productById)),
+    );
+  }
+
+  return [];
 };
 
 export const createOrder = async (payload) => {
-  const snapshot = await fetchOrdersSnapshot();
-  const { orders } = snapshot;
-  const createdAt = new Date().toISOString();
-
-  const nextOrder = normalizeOrder({
-    ...payload,
-    id: payload?.id ?? `o-${Date.now()}`,
-    cancellation: null,
-    createdBy: payload?.createdBy ?? "customer",
-    createdAt,
-    updatedAt: createdAt,
+  const currentUser = readAuthSession()?.user;
+  const products = await getProductsService().catch(() => []);
+  const productById = buildProductById(products);
+  const nextOrder = await createOrderService({
+    customerId: currentUser?.id,
+    shippingAddress: payload?.shippingAddress,
+    paymentMethod: payload?.paymentMethod,
+    items: Array.isArray(payload?.items)
+      ? payload.items.map((item) => ({
+          productId: String(item?.productId ?? "").trim(),
+          variantId: String(item?.variantId ?? "").trim(),
+          variantLabel: String(item?.variantLabel ?? "").trim(),
+          title: String(item?.title ?? "Product").trim(),
+          image: String(item?.image ?? "/favicon.svg").trim(),
+          quantity: Number(item?.quantity ?? 1),
+          price: Number(item?.price ?? 0),
+          vendorEmail: String(item?.vendorEmail ?? "")
+            .trim()
+            .toLowerCase(),
+          shopName: String(item?.shopName ?? "Shop").trim(),
+          sku: String(item?.sku ?? "").trim(),
+          color: String(item?.color ?? "Default").trim(),
+          size: String(item?.size ?? "Default").trim(),
+        }))
+      : [],
   });
 
-  await persistOrders([nextOrder, ...orders], snapshot);
-  return nextOrder;
+  return normalizeOrder(
+    enrichOrderWithProducts(nextOrder, productById, payload?.items),
+  );
 };
 
 export const updateOrderById = async ({ id, updates, actor }) => {
-  const normalizedId = String(id ?? "").trim();
-
-  if (!normalizedId) {
-    throw new Error("Missing order id.");
-  }
-
-  const snapshot = await fetchOrdersSnapshot();
-  const { orders } = snapshot;
-  let updatedOrder = null;
+  const normalizedStatus = normalizeOrderStatusValue(updates?.status);
   const normalizedActor = normalizeText(actor ?? "system").toLowerCase();
 
-  const nextOrders = orders.map((order) => {
-    if (String(order?.id ?? "") !== normalizedId) {
-      return order;
-    }
-
-    const currentOrder = normalizeOrder(order);
-    const nextStatus = updates?.status
-      ? normalizeOrderStatusValue(updates.status)
-      : currentOrder.status;
-    const updatedAt = new Date().toISOString();
-
-    if (normalizedActor === "admin") {
-      if (currentOrder.status !== "processing" || nextStatus !== "cancelled") {
-        throw new Error("Admin chỉ được hủy đơn khi đơn đang Processing.");
-      }
-
-      if (
-        !normalizeText(
-          updates?.cancellation?.reason ??
-            currentOrder?.cancellation?.reason ??
-            "",
-        )
-      ) {
-        throw new Error("Cancellation reason is required.");
-      }
-    }
-
-    validateStatusTransition(currentOrder.status, nextStatus);
-
-    if (
-      nextStatus === "cancelled" &&
-      !normalizeText(
-        updates?.cancellation?.reason ??
-          currentOrder?.cancellation?.reason ??
-          "",
-      )
-    ) {
-      throw new Error("Cancellation reason is required.");
-    }
-
-    const nextItem = normalizeOrder({
-      ...currentOrder,
-      ...updates,
-      status: nextStatus,
-      statusHistory: appendStatusHistory(
-        currentOrder,
-        nextStatus,
-        actor,
-        updatedAt,
-      ),
-      updatedAt,
-    });
-
-    updatedOrder = nextItem;
-    return nextItem;
-  });
-
-  if (!updatedOrder) {
-    throw new Error("Order not found.");
+  if (!normalizedStatus) {
+    throw new Error("Thiếu trạng thái đơn hàng để cập nhật.");
   }
 
-  await persistOrders(nextOrders, snapshot);
-  return updatedOrder;
+  if (normalizedActor === "customer") {
+    throw new Error(
+      "Backend hiện chưa hỗ trợ khách hàng tự huỷ đơn từ giao diện này.",
+    );
+  }
+
+  const nextOrder = await updateOrderStatusService(id, normalizedStatus);
+  return normalizeOrder({
+    ...updates,
+    ...nextOrder,
+  });
 };

@@ -2,40 +2,41 @@ import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import ProductCard from "../../components/ProductCard";
+import { useShopsQuery } from "../../hooks/useShopsQuery";
 import { useProductsQuery } from "../../hooks/useProductsQuery";
-import { useUsersQuery } from "../../hooks/useUsersQuery";
 import "./Shop.css";
 
 export default function ShopStore() {
   const { vendorKey } = useParams();
-  const { data: users = [] } = useUsersQuery();
+  const { data: shops = [] } = useShopsQuery();
   const { data: products = [] } = useProductsQuery();
 
-  const decodedVendorEmail = decodeURIComponent(String(vendorKey ?? ""))
-    .trim()
-    .toLowerCase();
+  const decodedShopId = decodeURIComponent(String(vendorKey ?? "")).trim();
 
-  const vendor = users.find((item) => {
-    const email = String(item?.email ?? "")
-      .trim()
-      .toLowerCase();
-    return email === decodedVendorEmail;
-  });
+  const vendor = shops.find(
+    (item) => String(item?.id ?? "").trim() === decodedShopId,
+  );
 
   const vendorProducts = useMemo(() => {
     return products
       .filter((product) => {
-        const email = String(product?.vendorEmail ?? "")
-          .trim()
-          .toLowerCase();
-        return email === decodedVendorEmail;
+        const productShopId = String(product?.shopId ?? "").trim();
+
+        if (productShopId && vendor?.id) {
+          return productShopId === String(vendor.id).trim();
+        }
+
+        return (
+          String(product?.shopName ?? "").trim() ===
+          String(vendor?.shopName ?? "").trim()
+        );
       })
       .map((product) => ({
         ...product,
         shopName: vendor?.shopName || vendor?.name || product?.shopName,
         vendorAvatarUrl: vendor?.avatarUrl || product?.vendorAvatarUrl,
       }));
-  }, [products, decodedVendorEmail, vendor]);
+  }, [products, vendor]);
 
   return (
     <main className="shop-page o-container">
@@ -44,17 +45,24 @@ export default function ShopStore() {
         <span>&gt;</span>
         <Link to="/shops">Shops</Link>
         <span>&gt;</span>
-        <strong>{vendor?.name ?? (decodedVendorEmail || "Shop")}</strong>
+        <strong>
+          {vendor?.name ?? vendor?.shopName ?? (decodedShopId || "Shop")}
+        </strong>
       </nav>
 
       <div className="shop-header">
         <div className="shop-header__title">
           <div className="shop-card__avatar" aria-hidden="true">
             {vendor?.avatarUrl ? (
-              <img src={vendor.avatarUrl} alt={vendor?.shopName || vendor?.name || "Shop"} />
+              <img
+                src={vendor.avatarUrl}
+                alt={vendor?.shopName || vendor?.name || "Shop"}
+              />
             ) : (
               <span>
-                {String(vendor?.shopName || vendor?.name || decodedVendorEmail || "S")
+                {String(
+                  vendor?.shopName || vendor?.name || decodedShopId || "S",
+                )
                   .charAt(0)
                   .toUpperCase()}
               </span>
@@ -62,7 +70,7 @@ export default function ShopStore() {
           </div>
           <div>
             <h1>{vendor?.shopName || vendor?.name || "Vendor Shop"}</h1>
-            <small>{vendor?.email || decodedVendorEmail || "N/A"}</small>
+            <small>{vendor?.email || "N/A"}</small>
           </div>
         </div>
         <span>{vendorProducts.length} products</span>

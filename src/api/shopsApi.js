@@ -1,4 +1,6 @@
 import { fetchResourceDocument, updateResourceData } from "./resourceApi";
+import apiClient, { extractApiPayload } from "./apiClient";
+import { buildShopFormData } from "../utils/formData";
 
 const SHOPS_RESOURCE_NAME = "shops";
 const ECOMMERCE_RESOURCE_NAME = "ecommerce-data";
@@ -13,6 +15,47 @@ function normalizeEmail(value) {
 
 function normalizeCategory(value) {
   return normalizeText(value).toLowerCase();
+}
+
+function normalizeShop(shop) {
+  const normalizedEmail = normalizeEmail(
+    shop?.email ?? shop?.contactEmail ?? shop?.vendorEmail ?? "",
+  );
+  const normalizedName =
+    normalizeText(shop?.shopName ?? shop?.name) ||
+    (normalizedEmail ? normalizedEmail.split("@")[0] : "Vendor Shop");
+
+  return {
+    ...shop,
+    id: normalizeText(shop?.id ?? shop?._id),
+    shopName: normalizedName,
+    name: normalizeText(shop?.name ?? normalizedName) || normalizedName,
+    email: normalizedEmail,
+    vendorEmail: normalizedEmail,
+    description: normalizeText(shop?.description),
+    logo: normalizeText(shop?.logo ?? shop?.avatarUrl),
+    banner: normalizeText(shop?.banner),
+    avatarUrl: normalizeText(shop?.avatarUrl ?? shop?.logo),
+    contactEmail: normalizeEmail(shop?.contactEmail ?? normalizedEmail),
+    phone: normalizeText(shop?.phone),
+    address:
+      shop?.address && typeof shop.address === "object"
+        ? {
+            addressLine1: normalizeText(
+              shop.address?.addressLine1 ?? shop.address?.address,
+            ),
+            city: normalizeText(shop.address?.city),
+            state: normalizeText(shop.address?.state),
+            zipCode: normalizeText(shop.address?.zipCode),
+            country: normalizeText(shop.address?.country),
+          }
+        : null,
+    categories: Array.isArray(shop?.categories) ? shop.categories : [],
+    totalProducts: Number(shop?.totalProducts ?? 0),
+    inStockProducts: Number(shop?.inStockProducts ?? 0),
+    createdAt: shop?.createdAt ?? null,
+    updatedAt: shop?.updatedAt ?? null,
+  };
 }
 
 function resolveShopsSnapshot(
@@ -239,13 +282,35 @@ async function persistShops(snapshot, shops) {
 }
 
 export async function getShops() {
+  try {
+    const response = await apiClient.get("/shops");
+    const payload = extractApiPayload(response);
+    if (Array.isArray(payload)) {
+      return payload.map(normalizeShop);
+    }
+  } catch {
+    return fetchFallbackShopsFromProducts();
+  }
+
   const { shops } = await fetchShopsSnapshot();
 
   if (Array.isArray(shops) && shops.length > 0) {
-    return shops;
+    return shops.map(normalizeShop);
   }
 
   return fetchFallbackShopsFromProducts();
+}
+
+export async function getMyShop() {
+  const response = await apiClient.get("/shops/me");
+  const payload = extractApiPayload(response);
+
+  return payload ? normalizeShop(payload) : null;
+}
+
+export async function updateMyShop(updates = {}) {
+  const response = await apiClient.put("/shops/me", buildShopFormData(updates));
+  return normalizeShop(extractApiPayload(response));
 }
 
 export async function syncShopsFromProducts(products) {

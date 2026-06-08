@@ -6,6 +6,7 @@ import {
   updateUserProfile,
   updateUserRole,
 } from "../api/authApi";
+import { clearAuthSession, readAuthSession } from "../utils/authStorage";
 import AuthContext from "./auth-context";
 
 const AUTH_STORAGE_KEY = "ls-ecommerce-auth-user";
@@ -22,13 +23,13 @@ function readStoredUser() {
     const storedUser = window.localStorage.getItem(AUTH_STORAGE_KEY);
 
     if (!storedUser) {
-      return null;
+      return readAuthSession()?.user ?? null;
     }
 
     return JSON.parse(storedUser);
   } catch {
     window.localStorage.removeItem(AUTH_STORAGE_KEY);
-    return null;
+    return readAuthSession()?.user ?? null;
   }
 }
 
@@ -86,6 +87,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(() => {
     setUser(null);
     window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    clearAuthSession();
   }, []);
 
   const value = useMemo(

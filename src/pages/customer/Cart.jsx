@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useQueries } from "@tanstack/react-query";
 
+import { getProductById } from "../../api/productApi";
 import { useAuth } from "../../hooks/useAuth";
 import { useCart } from "../../hooks/useCart";
-import { useProductsQuery } from "../../hooks/useProductsQuery";
 import { useUsersQuery } from "../../hooks/useUsersQuery";
 import "./Cart.css";
 
@@ -17,7 +18,6 @@ const DELIVERY_FEE = 5;
 
 function Cart() {
   const { user, isCustomer, isVendor } = useAuth();
-  const { data: products = [] } = useProductsQuery();
   const { data: users = [] } = useUsersQuery();
   const {
     items,
@@ -31,16 +31,89 @@ function Cart() {
   const navigate = useNavigate();
   const [showStockModal, setShowStockModal] = useState(false);
   const [stockMessage, setStockMessage] = useState("");
-
-  const stockByProductId = useMemo(
+  const cartProductIds = useMemo(
+    () =>
+      [
+        ...new Set(items.map((item) => String(item?.productId ?? "").trim())),
+      ].filter(Boolean),
+    [items],
+  );
+  const cartProductDetailQueries = useQueries({
+    queries: cartProductIds.map((productId) => ({
+      queryKey: ["products", "detail", productId],
+      queryFn: () => getProductById(productId),
+      enabled: Boolean(productId),
+      staleTime: 1000 * 60 * 5,
+    })),
+  });
+  const cartProductDetailById = useMemo(
     () =>
       new Map(
-        products.map((product) => [
-          String(product?.id ?? ""),
-          Number(product?.stock ?? 0),
+        cartProductIds.map((productId, index) => [
+          productId,
+          cartProductDetailQueries[index]?.data ?? null,
         ]),
       ),
-    [products],
+    [cartProductDetailQueries, cartProductIds],
+  );
+  const cartProductDetailQueryById = useMemo(
+    () =>
+      new Map(
+        cartProductIds.map((productId, index) => [
+          productId,
+          cartProductDetailQueries[index] ?? null,
+        ]),
+      ),
+    [cartProductDetailQueries, cartProductIds],
+  );
+  const stockStateByItemKey = useMemo(
+    () =>
+      new Map(
+        items.map((item) => {
+          const itemKey = buildCartItemKey(item);
+          const productId = String(item?.productId ?? "").trim();
+          const variantId = String(item?.variantId ?? "").trim();
+          const productDetail = cartProductDetailById.get(productId) ?? null;
+          const detailQuery = cartProductDetailQueryById.get(productId);
+          const variants = Array.isArray(productDetail?.variants)
+            ? productDetail.variants
+            : [];
+          const selectedVariant = variantId
+            ? (variants.find(
+                (variant) => String(variant?.id ?? "") === variantId,
+              ) ?? null)
+            : null;
+          const hasLoadedDetail =
+            Boolean(productDetail) && !detailQuery?.isLoading;
+          const currentStock = variantId
+            ? hasLoadedDetail
+              ? Math.max(0, Number(selectedVariant?.stock ?? 0))
+              : null
+            : hasLoadedDetail
+              ? Math.max(0, Number(productDetail?.stock ?? 0))
+              : null;
+          const variantLabel =
+            String(item?.variantLabel ?? "").trim() ||
+            String(selectedVariant?.label ?? "").trim();
+
+          return [
+            itemKey,
+            {
+              currentStock,
+              isStockChecking:
+                Boolean(detailQuery?.isLoading) || !hasLoadedDetail,
+              hasStockError: Boolean(detailQuery?.isError),
+              variantLabel,
+            },
+          ];
+        }),
+      ),
+    [
+      buildCartItemKey,
+      cartProductDetailById,
+      cartProductDetailQueryById,
+      items,
+    ],
   );
 
   const vendorMapByEmail = useMemo(
@@ -92,6 +165,39 @@ function Cart() {
       return;
     }
 
+    const invalidStockItem = items.find((item) => {
+      const itemKey = buildCartItemKey(item);
+      const stockState = stockStateByItemKey.get(itemKey);
+
+      if (
+        !stockState ||
+        stockState.hasStockError ||
+        stockState.isStockChecking
+      ) {
+        return true;
+      }
+
+      return Number(item?.quantity ?? 0) > Number(stockState.currentStock ?? 0);
+    });
+
+    if (invalidStockItem) {
+      const itemKey = buildCartItemKey(invalidStockItem);
+      const stockState = stockStateByItemKey.get(itemKey);
+
+      if (stockState?.hasStockError || stockState?.isStockChecking) {
+        setStockMessage(
+          "Đang kiểm tra tồn kho sản phẩm trong giỏ. Vui lòng thử lại sau vài giây.",
+        );
+      } else {
+        setStockMessage(
+          `Sản phẩm ${invalidStockItem.title} chỉ còn ${stockState?.currentStock ?? 0} sản phẩm.`,
+        );
+      }
+
+      setShowStockModal(true);
+      return;
+    }
+
     navigate("/checkout");
   };
 
@@ -117,6 +223,7 @@ function Cart() {
           ) : (
             items.map((item) => {
               const itemKey = buildCartItemKey(item);
+              const stockState = stockStateByItemKey.get(itemKey);
               const vendorEmail = String(item?.vendorEmail ?? "")
                 .trim()
                 .toLowerCase();
@@ -128,11 +235,19 @@ function Cart() {
                 (vendorEmail ? vendorEmail.split("@")[0] : "L&S Store");
               const shopAvatar = String(vendorProfile?.avatarUrl ?? "").trim();
               const shopInitial =
-                String(shopName ?? "S").trim().charAt(0).toUpperCase() || "S";
-              const currentStock = Number(
-                stockByProductId.get(String(item.productId)) ?? item.stock ?? 0,
-              );
-              const isReachedStockLimit = item.quantity >= currentStock;
+                String(shopName ?? "S")
+                  .trim()
+                  .charAt(0)
+                  .toUpperCase() || "S";
+              const currentStock = stockState?.currentStock;
+              const isStockChecking = Boolean(stockState?.isStockChecking);
+              const hasStockError = Boolean(stockState?.hasStockError);
+              const isReachedStockLimit =
+                typeof currentStock === "number" &&
+                item.quantity >= currentStock;
+              const resolvedVariantLabel =
+                stockState?.variantLabel ||
+                String(item?.variantLabel ?? "").trim();
 
               return (
                 <article key={itemKey} className="cart-item">
@@ -151,14 +266,25 @@ function Cart() {
 
                   <div className="cart-item__content">
                     <h2>{item.title}</h2>
-                    <p>
-                      Size: <span>{item.size}</span>
-                    </p>
-                    <p>
-                      Color: <span>{item.color}</span>
-                    </p>
+                    {resolvedVariantLabel ? (
+                      <p>
+                        Variant: <span>{resolvedVariantLabel}</span>
+                      </p>
+                    ) : (
+                      <>
+                        <p>
+                          Size: <span>{item.size}</span>
+                        </p>
+                        <p>
+                          Color: <span>{item.color}</span>
+                        </p>
+                      </>
+                    )}
                     <p className="cart-item__shop">
-                      <span className="cart-item__shop-avatar" aria-hidden="true">
+                      <span
+                        className="cart-item__shop-avatar"
+                        aria-hidden="true"
+                      >
                         {shopAvatar ? (
                           <img src={shopAvatar} alt="" loading="lazy" />
                         ) : (
@@ -166,6 +292,21 @@ function Cart() {
                         )}
                       </span>
                       Shop: <span>{shopName}</span>
+                    </p>
+                    <p
+                      className={`cart-item__stock ${
+                        hasStockError || currentStock === 0
+                          ? "cart-item__stock--warning"
+                          : ""
+                      }`}
+                    >
+                      {hasStockError
+                        ? "Không tải được tồn kho hiện tại."
+                        : isStockChecking
+                          ? "Đang kiểm tra tồn kho..."
+                          : currentStock === 0
+                            ? "Biến thể này đã hết hàng."
+                            : `Còn ${currentStock} sản phẩm.`}
                     </p>
                     <strong>{currency.format(item.price)}</strong>
                   </div>
@@ -187,9 +328,17 @@ function Cart() {
                       <button
                         type="button"
                         aria-label="Increase quantity"
-                        aria-disabled={isReachedStockLimit}
+                        aria-disabled={isStockChecking || isReachedStockLimit}
                         onClick={() => {
-                          if (item.quantity >= currentStock) {
+                          if (hasStockError || isStockChecking) {
+                            setStockMessage(
+                              "Đang kiểm tra tồn kho của sản phẩm này. Vui lòng thử lại sau vài giây.",
+                            );
+                            setShowStockModal(true);
+                          } else if (
+                            currentStock === 0 ||
+                            item.quantity >= currentStock
+                          ) {
                             setStockMessage(
                               `Chỉ còn ${currentStock} sản phẩm.`,
                             );

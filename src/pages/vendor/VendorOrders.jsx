@@ -9,6 +9,7 @@ import {
   extractVendorOrderItems,
   getItemProductId,
   isOrderOfVendor,
+  isProductOwnedByVendor,
   normalizeOrderStatus,
   resolveAddressSummary,
   resolveFullAddress,
@@ -57,6 +58,12 @@ function formatDateTime(value) {
 }
 
 function formatItemVariant(item) {
+  const explicitVariantLabel = String(item?.variantLabel ?? "").trim();
+
+  if (explicitVariantLabel) {
+    return explicitVariantLabel;
+  }
+
   const parts = [item?.size, item?.color].filter(Boolean);
   return parts.length > 0 ? parts.join(" / ") : "Default";
 }
@@ -189,15 +196,13 @@ export default function VendorOrders() {
   const vendorEmail = String(user?.email ?? "")
     .trim()
     .toLowerCase();
+  const vendorId = String(user?.id ?? "").trim();
 
   const vendorProducts = useMemo(() => {
-    return products.filter((product) => {
-      const productOwner = String(product?.vendorEmail ?? "")
-        .trim()
-        .toLowerCase();
-      return productOwner === vendorEmail;
-    });
-  }, [products, vendorEmail]);
+    return products.filter((product) =>
+      isProductOwnedByVendor(product, vendorEmail, vendorId),
+    );
+  }, [products, vendorEmail, vendorId]);
 
   const vendorProductIds = useMemo(
     () =>

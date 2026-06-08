@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { updateMyShop } from "../../api/shopsApi";
 import { useAuth } from "../../hooks/useAuth";
 import "./ProfileSettings.css";
 
@@ -16,10 +17,18 @@ export default function ProfileSettings() {
     bio: user?.bio ?? "",
     shopName: user?.shopName ?? "",
   }));
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [shouldRemoveAvatar, setShouldRemoveAvatar] = useState(false);
 
   const canUseDashboard = isAdmin || isVendor;
-  const backTargetPath = canUseDashboard ? (isAdmin ? "/admin" : "/vendor") : "/";
-  const backTargetLabel = canUseDashboard ? "Back to dashboard" : "Back to home";
+  const backTargetPath = canUseDashboard
+    ? isAdmin
+      ? "/admin"
+      : "/vendor"
+    : "/";
+  const backTargetLabel = canUseDashboard
+    ? "Back to dashboard"
+    : "Back to home";
 
   const roleLabel = useMemo(() => {
     if (Array.isArray(user?.roles) && user.roles.length > 0) {
@@ -47,10 +56,30 @@ export default function ProfileSettings() {
         name: form.name,
         phone: isAdmin ? undefined : form.phone,
         avatarUrl: form.avatarUrl,
+        avatarFile,
+        removeAvatar: shouldRemoveAvatar,
         address: isAdmin ? undefined : form.address,
         bio: form.bio,
         shopName: isVendor ? form.shopName : "",
       });
+
+      if (isVendor && String(form.shopName ?? "").trim()) {
+        await updateMyShop({
+          name: form.shopName,
+          contactEmail: user?.email ?? "",
+          phone: form.phone,
+          address: {
+            addressLine1: form.address,
+            city: "",
+            state: "",
+            zipCode: "",
+            country: "",
+          },
+        });
+      }
+
+      setAvatarFile(null);
+      setShouldRemoveAvatar(false);
 
       window.alert("Cap nhat profile thanh cong.");
     } catch (error) {
@@ -74,7 +103,11 @@ export default function ProfileSettings() {
             {form.avatarUrl ? (
               <img src={form.avatarUrl} alt="Profile avatar" />
             ) : (
-              <span>{String(form.name || user?.email || "U").charAt(0).toUpperCase()}</span>
+              <span>
+                {String(form.name || user?.email || "U")
+                  .charAt(0)
+                  .toUpperCase()}
+              </span>
             )}
           </div>
         </header>
@@ -113,6 +146,34 @@ export default function ProfileSettings() {
               onChange={handleChange}
               placeholder="https://..."
             />
+          </label>
+
+          <label className="is-full">
+            Avatar file
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => {
+                setAvatarFile(event.target.files?.[0] ?? null);
+                setShouldRemoveAvatar(false);
+              }}
+            />
+          </label>
+
+          <label className="is-full">
+            <input
+              type="checkbox"
+              checked={shouldRemoveAvatar}
+              onChange={(event) => {
+                const isChecked = event.target.checked;
+                setShouldRemoveAvatar(isChecked);
+
+                if (isChecked) {
+                  setAvatarFile(null);
+                }
+              }}
+            />
+            Remove current avatar
           </label>
 
           {isVendor && (

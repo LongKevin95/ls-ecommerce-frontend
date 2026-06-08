@@ -12,6 +12,10 @@ function normalizeEmail(value) {
   return normalizeText(value).toLowerCase();
 }
 
+function normalizeId(value) {
+  return normalizeText(value);
+}
+
 export function normalizeOrderStatus(status) {
   const normalized = String(status ?? "")
     .trim()
@@ -52,6 +56,35 @@ export function getItemProductId(item) {
       item?.product?._id ??
       "",
   ).trim();
+}
+
+export function isProductOwnedByVendor(product, vendorEmail, vendorId = "") {
+  const normalizedVendorEmail = normalizeEmail(vendorEmail);
+  const normalizedVendorId = normalizeId(vendorId);
+  const productVendorEmail = normalizeEmail(
+    product?.vendorEmail ?? product?.shopEmail ?? "",
+  );
+  const productVendorId = normalizeId(
+    product?.vendorId ?? product?.vendor?._id ?? "",
+  );
+
+  if (
+    normalizedVendorId &&
+    productVendorId &&
+    productVendorId === normalizedVendorId
+  ) {
+    return true;
+  }
+
+  if (
+    normalizedVendorEmail &&
+    productVendorEmail &&
+    productVendorEmail === normalizedVendorEmail
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 export function isItemOfVendor(item, vendorEmail, vendorProductIds) {

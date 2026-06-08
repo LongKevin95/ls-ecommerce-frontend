@@ -113,6 +113,15 @@
   gap: 6px;
 }
 
+.cart-item__stock {
+  font-size: 14px;
+  color: #166534;
+}
+
+.cart-item__stock--warning {
+  color: #b45309;
+}
+
 .cart-item__shop-avatar {
   inline-size: 20px;
   block-size: 20px;
@@ -291,6 +300,14 @@ body[data-theme="dark"] .cart-summary__row,
 body[data-theme="dark"] .cart-empty p,
 body[data-theme="dark"] .stock-modal p {
   color: #b8c2d1;
+}
+
+body[data-theme="dark"] .cart-item__stock {
+  color: #86efac;
+}
+
+body[data-theme="dark"] .cart-item__stock--warning {
+  color: #facc15;
 }
 
 body[data-theme="dark"] .cart-item__shop span:last-child {

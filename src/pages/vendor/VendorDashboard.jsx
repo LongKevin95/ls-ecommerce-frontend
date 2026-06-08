@@ -6,6 +6,7 @@ import { useOrdersQuery } from "../../hooks/useOrdersQuery";
 import {
   extractVendorOrderItems,
   isOrderOfVendor,
+  isProductOwnedByVendor,
   normalizeOrderStatus,
   resolveOrderDate,
   resolveOrderCustomer,
@@ -31,15 +32,13 @@ function VendorDashboard() {
   const vendorEmail = String(user?.email ?? "")
     .trim()
     .toLowerCase();
+  const vendorId = String(user?.id ?? "").trim();
 
   const vendorProducts = useMemo(() => {
-    return products.filter((product) => {
-      const productOwner = String(product?.vendorEmail ?? "")
-        .trim()
-        .toLowerCase();
-      return productOwner === vendorEmail;
-    });
-  }, [products, vendorEmail]);
+    return products.filter((product) =>
+      isProductOwnedByVendor(product, vendorEmail, vendorId),
+    );
+  }, [products, vendorEmail, vendorId]);
 
   const vendorProductIds = useMemo(
     () =>

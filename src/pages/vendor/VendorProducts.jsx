@@ -10,6 +10,7 @@ import {
 } from "../../api/productApi";
 import { useAdminProductsQuery } from "../../hooks/useAdminProductsQuery";
 import { useAuth } from "../../hooks/useAuth";
+import { isProductOwnedByVendor } from "./vendorDataUtils";
 import "./VendorProducts.css";
 
 const defaultForm = {
@@ -34,34 +35,129 @@ const categoryOptions = [
   {
     value: "fashion-nam",
     label: "Men Fashion",
-    flags: { useSizes: true, useColors: true, useFashionFields: true },
+    flags: {
+      useSizes: false,
+      useColors: false,
+      useBrand: true,
+      useMaterial: true,
+    },
   },
   {
     value: "fashion-nu",
     label: "Women Fashion",
-    flags: { useSizes: true, useColors: true, useFashionFields: true },
+    flags: {
+      useSizes: false,
+      useColors: false,
+      useBrand: true,
+      useMaterial: true,
+    },
   },
   {
     value: "do-gia-dung",
     label: "Home",
-    flags: { useSizes: false, useColors: false, useHomeFields: true },
+    flags: {
+      useSizes: false,
+      useColors: false,
+      useBrand: true,
+      useMaterial: true,
+    },
   },
   {
     value: "dien-tu",
     label: "Electronics",
-    flags: { useSizes: false, useColors: false, useElectronicsFields: true },
+    flags: {
+      useSizes: false,
+      useColors: false,
+      useBrand: true,
+      useElectronicsFields: true,
+    },
   },
   {
     value: "thuc-pham",
     label: "Food",
-    flags: { useSizes: false, useColors: false, useFoodFields: true },
+    flags: {
+      useSizes: false,
+      useColors: false,
+      useBrand: true,
+      useFoodFields: true,
+    },
   },
   {
     value: "others",
     label: "Others",
-    flags: { useSizes: false, useColors: false },
+    flags: { useSizes: false, useColors: false, useBrand: true },
   },
 ];
+
+const categoryVariantFields = {
+  "fashion-nam": [
+    { key: "color", label: "Color" },
+    { key: "size", label: "Size" },
+  ],
+  "fashion-nu": [
+    { key: "color", label: "Color" },
+    { key: "size", label: "Size" },
+  ],
+  "do-gia-dung": [
+    { key: "color", label: "Color" },
+    { key: "size", label: "Size" },
+  ],
+  "dien-tu": [
+    { key: "storage", label: "Storage" },
+    { key: "color", label: "Color" },
+  ],
+  "thuc-pham": [{ key: "packSize", label: "Pack size" }],
+  others: [{ key: "optionName", label: "Option" }],
+};
+
+function createLocalVariantId() {
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeVariantFields(categoryValue) {
+  return categoryVariantFields[categoryValue] ?? categoryVariantFields.others;
+}
+
+function normalizeVariantOptionValues(categoryValue, optionValues = {}) {
+  return normalizeVariantFields(categoryValue).reduce((result, field) => {
+    result[field.key] = String(optionValues?.[field.key] ?? "");
+    return result;
+  }, {});
+}
+
+function createVariantDraft(categoryValue, overrides = {}) {
+  return {
+    localId: String(overrides.localId ?? createLocalVariantId()),
+    sku: String(overrides.sku ?? ""),
+    title: String(overrides.title ?? ""),
+    price: String(overrides.price ?? ""),
+    oldPrice: String(overrides.oldPrice ?? ""),
+    stock: String(overrides.stock ?? ""),
+    image: String(overrides.image ?? ""),
+    optionValues: normalizeVariantOptionValues(
+      categoryValue,
+      overrides.optionValues,
+    ),
+  };
+}
+
+function hasMeaningfulVariantDraft(variant) {
+  if (!variant || typeof variant !== "object") {
+    return false;
+  }
+
+  return (
+    String(variant.sku ?? "").trim() ||
+    String(variant.title ?? "").trim() ||
+    String(variant.price ?? "").trim() ||
+    String(variant.oldPrice ?? "").trim() ||
+    String(variant.stock ?? "").trim() ||
+    String(variant.image ?? "").trim() ||
+    Object.values(variant.optionValues ?? {}).some((value) =>
+      String(value ?? "").trim(),
+    )
+  );
+}
 
 function parseInputList(text) {
   return String(text ?? "")
@@ -91,15 +187,6 @@ function parseImageUrls(text) {
   return [
     ...new Set(parseInputList(text).map(normalizeImageSource).filter(Boolean)),
   ];
-}
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(new Error("Không thể đọc ảnh vừa chọn."));
-    reader.readAsDataURL(file);
-  });
 }
 
 function getProductThumbnail(product) {
@@ -314,9 +401,13 @@ export default function VendorProducts() {
   const [existingGalleryImages, setExistingGalleryImages] = useState([]);
   const [selectedThumbnailFile, setSelectedThumbnailFile] = useState(null);
   const [selectedGalleryFiles, setSelectedGalleryFiles] = useState([]);
+  const [variantRows, setVariantRows] = useState(() => [
+    createVariantDraft(defaultForm.category),
+  ]);
   const [imagePendingRemoval, setImagePendingRemoval] = useState(null);
   const [editingId, setEditingId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveIntent, setSaveIntent] = useState("");
   const [processingProductId, setProcessingProductId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -325,23 +416,23 @@ export default function VendorProducts() {
   const vendorEmail = String(user?.email ?? "")
     .trim()
     .toLowerCase();
+  const vendorId = String(user?.id ?? "").trim();
   const vendorShopName =
-    user?.name || (vendorEmail ? vendorEmail.split("@")[0] : "My Shop");
+    user?.shopName ||
+    user?.name ||
+    (vendorEmail ? vendorEmail.split("@")[0] : "My Shop");
 
   const vendorProducts = useMemo(() => {
     return [...products]
-      .filter((product) => {
-        const productOwner = String(product?.vendorEmail ?? "")
-          .trim()
-          .toLowerCase();
-        return productOwner === vendorEmail;
-      })
+      .filter((product) =>
+        isProductOwnedByVendor(product, vendorEmail, vendorId),
+      )
       .sort(
         (firstProduct, secondProduct) =>
           getProductCreatedTimestamp(secondProduct) -
           getProductCreatedTimestamp(firstProduct),
       );
-  }, [products, vendorEmail]);
+  }, [products, vendorEmail, vendorId]);
 
   const paginatedVendorProducts = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -400,6 +491,10 @@ export default function VendorProducts() {
       categoryOptions[0]
     );
   }, [form.category]);
+  const selectedVariantFields = useMemo(
+    () => normalizeVariantFields(form.category),
+    [form.category],
+  );
 
   const editProductIdFromQuery = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -409,6 +504,27 @@ export default function VendorProducts() {
   function startEditingProduct(product) {
     const productThumbnail = getProductThumbnail(product);
     const productGalleryImages = getProductGalleryImages(product);
+    const nextVariantRows =
+      Array.isArray(product?.variants) && product.variants.length > 0
+        ? product.variants.map((variant) =>
+            createVariantDraft(product.category, {
+              localId: variant.id,
+              sku: variant.sku,
+              title: variant.title,
+              price: variant.price,
+              oldPrice: variant.oldPrice,
+              stock: variant.stock,
+              image: variant.image,
+              optionValues: variant.optionValues,
+            }),
+          )
+        : [
+            createVariantDraft(product.category, {
+              price: product.price,
+              oldPrice: product.oldPrice,
+              stock: product.stock,
+            }),
+          ];
 
     setEditingId(String(product.id));
     setForm({
@@ -438,9 +554,22 @@ export default function VendorProducts() {
     setExistingGalleryImages(productGalleryImages);
     setSelectedThumbnailFile(null);
     setSelectedGalleryFiles([]);
+    setVariantRows(nextVariantRows);
     setImagePendingRemoval(null);
     setErrorMessage("");
   }
+
+  useEffect(() => {
+    setVariantRows((previous) => {
+      if (!Array.isArray(previous) || previous.length === 0) {
+        return [createVariantDraft(form.category)];
+      }
+
+      return previous.map((variant) =>
+        createVariantDraft(form.category, variant),
+      );
+    });
+  }, [form.category]);
 
   useEffect(() => {
     if (!editProductIdFromQuery || editingId) {
@@ -604,27 +733,97 @@ export default function VendorProducts() {
     setExistingGalleryImages([]);
     setSelectedThumbnailFile(null);
     setSelectedGalleryFiles([]);
+    setVariantRows([createVariantDraft(defaultForm.category)]);
     setImagePendingRemoval(null);
     setEditingId("");
+    setSaveIntent("");
     setErrorMessage("");
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
+  function handleAddVariantRow() {
+    setVariantRows((previous) => [
+      ...previous,
+      createVariantDraft(form.category),
+    ]);
 
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  }
+
+  function handleRemoveVariantRow(localId) {
+    setVariantRows((previous) => {
+      const nextRows = previous.filter(
+        (variant) => variant.localId !== localId,
+      );
+      return nextRows.length > 0
+        ? nextRows
+        : [createVariantDraft(form.category)];
+    });
+
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  }
+
+  function handleVariantFieldChange(localId, fieldName, nextValue) {
+    setVariantRows((previous) =>
+      previous.map((variant) =>
+        variant.localId === localId
+          ? {
+              ...variant,
+              [fieldName]: nextValue,
+            }
+          : variant,
+      ),
+    );
+
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  }
+
+  function handleVariantOptionChange(localId, optionKey, nextValue) {
+    setVariantRows((previous) =>
+      previous.map((variant) =>
+        variant.localId === localId
+          ? {
+              ...variant,
+              optionValues: {
+                ...(variant.optionValues ?? {}),
+                [optionKey]: nextValue,
+              },
+            }
+          : variant,
+      ),
+    );
+
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  }
+
+  async function handleSaveProduct(targetStatus) {
     const title = form.title.trim();
     const description = form.description.trim();
     const category = form.category.trim().toLowerCase();
-    const price = Number(form.price);
-    const stock = Number(form.stock);
+    const rawPrice = String(form.price ?? "").trim();
+    const rawStock = String(form.stock ?? "").trim();
+    const price = rawPrice ? Number(form.price) : 0;
+    const stock = rawStock ? Number(form.stock) : 0;
 
-    if (!title || !description || !category) {
-      setErrorMessage("Vui lòng nhập title, category và description.");
-      return;
-    }
+    if (targetStatus === PRODUCT_STATUS.PENDING) {
+      if (!title || !description || !category) {
+        setErrorMessage("Vui lòng nhập title, category và description.");
+        return;
+      }
 
-    if (!Number.isFinite(price) || price <= 0) {
-      setErrorMessage("Price phải là số lớn hơn 0.");
+      if (!rawPrice || !Number.isFinite(price) || price <= 0) {
+        setErrorMessage("Price phải là số lớn hơn 0.");
+        return;
+      }
+    } else if (rawPrice && (!Number.isFinite(price) || price < 0)) {
+      setErrorMessage("Price phải là số lớn hơn hoặc bằng 0.");
       return;
     }
 
@@ -639,30 +838,30 @@ export default function VendorProducts() {
     }
 
     try {
+      setSaveIntent(targetStatus);
       setIsSaving(true);
-
-      const [uploadedThumbnail, uploadedGalleryImages] = await Promise.all([
-        selectedThumbnailFile ? readFileAsDataUrl(selectedThumbnailFile) : "",
-        Promise.all(
-          selectedGalleryFiles.map((file) => readFileAsDataUrl(file)),
-        ),
-      ]);
 
       const linkedThumbnail = normalizeImageSource(form.thumbnailUrl);
       const thumbnail =
-        normalizeImageSource(uploadedThumbnail) ||
-        linkedThumbnail ||
-        normalizeImageSource(existingThumbnail);
+        linkedThumbnail || normalizeImageSource(existingThumbnail);
+      const hasUploadedGalleryFiles = selectedGalleryFiles.length > 0;
       const linkedGalleryImages = parseImageUrls(form.galleryUrlsText);
-      const images = [
-        ...new Set([
-          ...existingGalleryImages.map(normalizeImageSource).filter(Boolean),
-          ...linkedGalleryImages,
-          ...uploadedGalleryImages.map(normalizeImageSource).filter(Boolean),
-        ]),
-      ];
+      const images = hasUploadedGalleryFiles
+        ? []
+        : [
+            ...new Set([
+              ...existingGalleryImages
+                .map(normalizeImageSource)
+                .filter(Boolean),
+              ...linkedGalleryImages,
+            ]),
+          ];
 
-      if (!thumbnail) {
+      if (
+        targetStatus === PRODUCT_STATUS.PENDING &&
+        !thumbnail &&
+        !selectedThumbnailFile
+      ) {
         setErrorMessage(
           "Bạn cần upload ảnh đại diện cho sản phẩm hoặc nhập link ảnh.",
         );
@@ -676,15 +875,94 @@ export default function VendorProducts() {
         ? parseInputList(form.sizesText)
         : [];
 
-      if (selectedCategoryConfig.flags.useSizes && sizes.length === 0) {
+      const normalizedVariants = variantRows
+        .map((variant) => {
+          if (!hasMeaningfulVariantDraft(variant)) {
+            return null;
+          }
+
+          const variantPrice = String(variant.price ?? "").trim()
+            ? Number(variant.price)
+            : price;
+          const variantOldPrice = String(variant.oldPrice ?? "").trim()
+            ? Number(variant.oldPrice)
+            : variantPrice;
+          const variantStock = String(variant.stock ?? "").trim()
+            ? Number(variant.stock)
+            : 0;
+
+          if (
+            !Number.isFinite(variantPrice) ||
+            variantPrice < 0 ||
+            (targetStatus === PRODUCT_STATUS.PENDING && variantPrice <= 0)
+          ) {
+            throw new Error("Mỗi biến thể cần price lớn hơn 0.");
+          }
+
+          if (!Number.isFinite(variantOldPrice) || variantOldPrice < 0) {
+            throw new Error("oldPrice của biến thể không hợp lệ.");
+          }
+
+          if (!Number.isFinite(variantStock) || variantStock < 0) {
+            throw new Error("stock của biến thể phải lớn hơn hoặc bằng 0.");
+          }
+
+          return {
+            sku: String(variant.sku ?? "").trim(),
+            title: String(variant.title ?? "").trim(),
+            price: variantPrice,
+            oldPrice: variantOldPrice,
+            stock: variantStock,
+            image: String(variant.image ?? "").trim(),
+            optionValues: Object.entries(variant.optionValues ?? {}).reduce(
+              (result, [key, value]) => {
+                const normalizedValue = String(value ?? "").trim();
+
+                if (normalizedValue) {
+                  result[key] = normalizedValue;
+                }
+
+                return result;
+              },
+              {},
+            ),
+          };
+        })
+        .filter(Boolean);
+
+      const resolvedPrice =
+        normalizedVariants.length > 0
+          ? Math.min(...normalizedVariants.map((variant) => variant.price))
+          : price;
+      const resolvedOldPrice =
+        normalizedVariants.length > 0
+          ? Math.max(
+              ...normalizedVariants.map((variant) => variant.oldPrice),
+              resolvedPrice,
+            )
+          : price;
+      const resolvedStock =
+        normalizedVariants.length > 0
+          ? normalizedVariants.reduce((sum, variant) => sum + variant.stock, 0)
+          : stock;
+
+      if (
+        targetStatus === PRODUCT_STATUS.PENDING &&
+        selectedCategoryConfig.flags.useSizes &&
+        sizes.length === 0 &&
+        normalizedVariants.length === 0
+      ) {
         setErrorMessage("Danh muc fashion can nhap it nhat 1 size.");
         return;
       }
 
       const attributes = {};
 
-      if (selectedCategoryConfig.flags.useFashionFields) {
+      if (selectedCategoryConfig.flags.useBrand) {
         attributes.brand = form.brand.trim();
+      }
+
+      if (selectedCategoryConfig.flags.useMaterial) {
         attributes.material = form.material.trim();
       }
 
@@ -706,15 +984,26 @@ export default function VendorProducts() {
         title,
         category,
         description,
-        price,
-        stock,
-        image: thumbnail,
-        images,
+        price: resolvedPrice,
+        oldPrice: resolvedOldPrice,
+        stock: resolvedStock,
+        thumbnail,
+        thumbnailFile: selectedThumbnailFile,
+        gallery: images,
+        galleryFiles: selectedGalleryFiles,
+        removeThumbnail: editingId
+          ? !selectedThumbnailFile && !thumbnail
+          : false,
+        replaceGallery:
+          Boolean(editingId) &&
+          (hasUploadedGalleryFiles || images.length === 0),
         colors,
         sizes,
+        variants: normalizedVariants,
         vendorEmail,
         shopName: vendorShopName,
         attributes,
+        status: targetStatus,
       };
 
       let savedProduct = null;
@@ -733,7 +1022,6 @@ export default function VendorProducts() {
           rating: 0,
           reviews: 0,
           discountPercentage: 0,
-          oldPrice: price,
         });
       }
 
@@ -751,8 +1039,14 @@ export default function VendorProducts() {
         error?.message ?? "Không thể lưu sản phẩm. Vui lòng thử lại.",
       );
     } finally {
+      setSaveIntent("");
       setIsSaving(false);
     }
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    void handleSaveProduct(PRODUCT_STATUS.PENDING);
   }
 
   async function handleAction(product, action) {
@@ -985,7 +1279,9 @@ export default function VendorProducts() {
                   onChange={handleInputChange}
                 />
                 <span className="vendor-products-file-summary">
-                  Mỗi link một dòng hoặc ngăn cách bằng dấu phẩy.
+                  Mỗi link một dòng hoặc ngăn cách bằng dấu phẩy. Nếu bạn chọn
+                  file gallery mới, bộ gallery hiện tại sẽ được thay bằng các
+                  file vừa chọn.
                 </span>
 
                 {existingGalleryImages.length > 0 && (
@@ -1053,30 +1349,39 @@ export default function VendorProducts() {
               </label>
             )}
 
-            {selectedCategoryConfig.flags.useFashionFields && (
-              <>
-                <label>
-                  Brand
-                  <input
-                    name="brand"
-                    type="text"
-                    placeholder="VD: Zara, H&M"
-                    value={form.brand}
-                    onChange={handleInputChange}
-                  />
-                </label>
+            {selectedCategoryConfig.flags.useBrand && (
+              <label>
+                Brand
+                <input
+                  name="brand"
+                  type="text"
+                  placeholder={
+                    form.category === "fashion-nam" ||
+                    form.category === "fashion-nu"
+                      ? "VD: Zara, H&M"
+                      : "VD: Samsung, Lock&Lock, Orion"
+                  }
+                  value={form.brand}
+                  onChange={handleInputChange}
+                />
+              </label>
+            )}
 
-                <label>
-                  Material
-                  <input
-                    name="material"
-                    type="text"
-                    placeholder="Cotton, Linen..."
-                    value={form.material}
-                    onChange={handleInputChange}
-                  />
-                </label>
-              </>
+            {selectedCategoryConfig.flags.useMaterial && (
+              <label>
+                Material
+                <input
+                  name="material"
+                  type="text"
+                  placeholder={
+                    form.category === "do-gia-dung"
+                      ? "Nhựa, gỗ, inox..."
+                      : "Cotton, Linen..."
+                  }
+                  value={form.material}
+                  onChange={handleInputChange}
+                />
+              </label>
             )}
 
             {selectedCategoryConfig.flags.useElectronicsFields && (
@@ -1130,18 +1435,158 @@ export default function VendorProducts() {
               </>
             )}
 
-            {selectedCategoryConfig.flags.useHomeFields && (
-              <label>
-                Material
-                <input
-                  name="material"
-                  type="text"
-                  placeholder="Nhựa, gỗ, inox..."
-                  value={form.material}
-                  onChange={handleInputChange}
-                />
-              </label>
-            )}
+            <div className="vendor-products-variants is-full">
+              <div className="vendor-products-variants__header">
+                <div>
+                  <strong>Variants</strong>
+                  <p>
+                    Thêm các biến thể theo danh mục hiện tại. Nếu bạn để trống,
+                    backend sẽ tự tạo 1 biến thể mặc định từ price và stock ở
+                    trên.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="vendor-products-variants__add-btn"
+                  onClick={handleAddVariantRow}
+                >
+                  Add variant
+                </button>
+              </div>
+
+              <div className="vendor-products-variant-list">
+                {variantRows.map((variant, index) => (
+                  <div
+                    className="vendor-products-variant-card"
+                    key={variant.localId}
+                  >
+                    <div className="vendor-products-variant-card__header">
+                      <strong>Variant {index + 1}</strong>
+                      <button
+                        type="button"
+                        className="vendor-products-variant-card__remove-btn"
+                        onClick={() => handleRemoveVariantRow(variant.localId)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+
+                    <div className="vendor-products-variant-grid">
+                      {selectedVariantFields.map((field) => (
+                        <label key={`${variant.localId}-${field.key}`}>
+                          {field.label}
+                          <input
+                            type="text"
+                            value={variant.optionValues?.[field.key] ?? ""}
+                            onChange={(event) =>
+                              handleVariantOptionChange(
+                                variant.localId,
+                                field.key,
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </label>
+                      ))}
+
+                      <label>
+                        SKU
+                        <input
+                          type="text"
+                          value={variant.sku}
+                          onChange={(event) =>
+                            handleVariantFieldChange(
+                              variant.localId,
+                              "sku",
+                              event.target.value,
+                            )
+                          }
+                        />
+                      </label>
+
+                      <label>
+                        Variant title
+                        <input
+                          type="text"
+                          value={variant.title}
+                          onChange={(event) =>
+                            handleVariantFieldChange(
+                              variant.localId,
+                              "title",
+                              event.target.value,
+                            )
+                          }
+                        />
+                      </label>
+
+                      <label>
+                        Price
+                        <input
+                          type="number"
+                          min="0"
+                          value={variant.price}
+                          onChange={(event) =>
+                            handleVariantFieldChange(
+                              variant.localId,
+                              "price",
+                              event.target.value,
+                            )
+                          }
+                        />
+                      </label>
+
+                      <label>
+                        Old price
+                        <input
+                          type="number"
+                          min="0"
+                          value={variant.oldPrice}
+                          onChange={(event) =>
+                            handleVariantFieldChange(
+                              variant.localId,
+                              "oldPrice",
+                              event.target.value,
+                            )
+                          }
+                        />
+                      </label>
+
+                      <label>
+                        Stock
+                        <input
+                          type="number"
+                          min="0"
+                          value={variant.stock}
+                          onChange={(event) =>
+                            handleVariantFieldChange(
+                              variant.localId,
+                              "stock",
+                              event.target.value,
+                            )
+                          }
+                        />
+                      </label>
+
+                      <label className="is-full">
+                        Variant image URL
+                        <input
+                          type="url"
+                          placeholder="https://example.com/variant-image.jpg"
+                          value={variant.image}
+                          onChange={(event) =>
+                            handleVariantFieldChange(
+                              variant.localId,
+                              "image",
+                              event.target.value,
+                            )
+                          }
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             {errorMessage && (
               <p className="vendor-products-error">{errorMessage}</p>
@@ -1152,23 +1597,30 @@ export default function VendorProducts() {
                 Reset
               </button>
               <button
+                type="button"
+                disabled={isSaving}
+                className="vendor-products-actions__draft-btn"
+                onClick={() => {
+                  void handleSaveProduct(PRODUCT_STATUS.DRAFT);
+                }}
+              >
+                {isSaving && saveIntent === PRODUCT_STATUS.DRAFT
+                  ? "Saving draft..."
+                  : "Save draft"}
+              </button>
+              <button
                 type="submit"
                 disabled={isSaving}
                 className={isSaving ? "is-saving" : ""}
               >
-                {editingId
-                  ? isSaving
-                    ? "Saving..."
-                    : "Save changes"
-                  : isSaving
-                    ? "Submitting..."
-                    : "Submit product"}
+                {isSaving && saveIntent === PRODUCT_STATUS.PENDING
+                  ? "Submitting..."
+                  : "Submit product"}
               </button>
             </div>
           </fieldset>
         </form>
       </section>
-
       <section className="vendor-products-card">
         <h2>Danh sách sản phẩm</h2>
 
@@ -1228,18 +1680,16 @@ export default function VendorProducts() {
                         <span className="vendor-action-spinner" />
                       )}
 
-                      {!isRejected && (
-                        <button
-                          type="button"
-                          className="vendor-action-btn vendor-action-btn--icon vendor-action-btn--edit"
-                          disabled={isSaving}
-                          onClick={() => handleAction(product, "edit")}
-                          title="Edit"
-                          aria-label="Edit product"
-                        >
-                          <EditIcon />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="vendor-action-btn vendor-action-btn--icon vendor-action-btn--edit"
+                        disabled={isSaving}
+                        onClick={() => handleAction(product, "edit")}
+                        title="Edit"
+                        aria-label="Edit product"
+                      >
+                        <EditIcon />
+                      </button>
 
                       <button
                         type="button"
@@ -1329,7 +1779,6 @@ export default function VendorProducts() {
           </div>
         )}
       </section>
-
       {imagePendingRemoval && (
         <div className="vendor-products-modal" role="dialog" aria-modal="true">
           <div
@@ -1359,6 +1808,7 @@ export default function VendorProducts() {
           </div>
         </div>
       )}
-d.admin-sidebar    </div>
+      d.admin-sidebar{" "}
+    </div>
   );
 }

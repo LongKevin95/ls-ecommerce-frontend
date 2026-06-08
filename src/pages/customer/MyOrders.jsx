@@ -149,6 +149,12 @@ function buildOrderSearchText(order, orderItems, shops, statusLabel) {
 }
 
 function buildOrderItemVariantText(item) {
+  const explicitVariantLabel = String(item?.variantLabel ?? "").trim();
+
+  if (explicitVariantLabel) {
+    return explicitVariantLabel;
+  }
+
   return [
     item?.color ? `Màu ${item.color}` : null,
     item?.size ? `Size ${item.size}` : null,

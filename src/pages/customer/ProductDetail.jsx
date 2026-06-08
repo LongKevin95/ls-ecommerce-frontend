@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import ProductCard from "../../components/ProductCard";
 import {
   formatProductCategoryLabel,
+  getProductById,
   upsertVendorReply,
 } from "../../api/productApi";
 import { useAdminProductsQuery } from "../../hooks/useAdminProductsQuery";
@@ -46,6 +47,18 @@ function isValidImageSource(value) {
   return (
     normalizeImageSource(normalizedValue.slice(separatorIndex + 1)).length > 0
   );
+}
+
+function buildFieldEntries(fields, values) {
+  return Array.isArray(fields)
+    ? fields
+        .map((field) => ({
+          key: String(field?.key ?? "").trim(),
+          label: String(field?.label ?? field?.key ?? "").trim(),
+          value: String(values?.[field?.key] ?? "").trim(),
+        }))
+        .filter((item) => item.key && item.value)
+    : [];
 }
 
 function ProductDetail() {
@@ -131,9 +144,22 @@ function ProductDetail() {
   const [selectedColorByProduct, setSelectedColorByProduct] = useState({});
   const [selectedGalleryImageByProduct, setSelectedGalleryImageByProduct] =
     useState({});
+  const [selectedVariantIdByProduct, setSelectedVariantIdByProduct] = useState(
+    {},
+  );
   const [selectedSizeByProduct, setSelectedSizeByProduct] = useState({});
   const [replyTextByReview, setReplyTextByReview] = useState({});
   const [processingReplyKey, setProcessingReplyKey] = useState("");
+  const {
+    data: detailProduct = null,
+    isLoading: isDetailLoading,
+    isError: isDetailError,
+  } = useQuery({
+    queryKey: ["products", "detail", String(id ?? "")],
+    queryFn: () => getProductById(id),
+    enabled: Boolean(id),
+    staleTime: 1000 * 60 * 5,
+  });
 
   const previewProduct = useMemo(() => {
     const locationProduct = location.state?.product;
@@ -195,7 +221,33 @@ function ProductDetail() {
     withVendorDisplay,
   ]);
 
-  const product = resolvedProduct ?? previewProduct;
+  const product = detailProduct ?? resolvedProduct ?? previewProduct;
+  const productVariants = Array.isArray(product?.variants)
+    ? product.variants
+    : [];
+  const selectedVariantId =
+    selectedVariantIdByProduct[id] ??
+    product?.defaultVariantId ??
+    product?.defaultVariant?.id ??
+    productVariants[0]?.id ??
+    "";
+  const selectedVariant =
+    productVariants.find((variant) => variant.id === selectedVariantId) ??
+    product?.defaultVariant ??
+    productVariants[0] ??
+    null;
+  const productAttributeEntries = buildFieldEntries(
+    product?.categoryConfig?.productAttributeFields,
+    product?.attributes,
+  );
+  const variantOptionEntries = buildFieldEntries(
+    product?.categoryConfig?.variantOptionFields,
+    selectedVariant?.optionValues,
+  );
+  const variantAttributeEntries = buildFieldEntries(
+    product?.categoryConfig?.variantAttributeFields,
+    selectedVariant?.attributes,
+  );
 
   const relatedProducts = useMemo(
     () =>
@@ -207,9 +259,13 @@ function ProductDetail() {
   );
 
   const selectedColor =
-    selectedColorByProduct[id] ?? product?.colors?.[0] ?? "#111111";
+    selectedVariant?.optionValues?.color ??
+    selectedColorByProduct[id] ??
+    product?.colors?.[0] ??
+    "Default";
 
   const selectedSize =
+    selectedVariant?.optionValues?.size ??
     selectedSizeByProduct[id] ??
     product?.sizes?.[2] ??
     product?.sizes?.[0] ??
@@ -219,6 +275,7 @@ function ProductDetail() {
     if (!product) return [];
 
     const images = [
+      selectedVariant?.image,
       product.image,
       ...(Array.isArray(product.images) ? product.images : []),
     ]
@@ -232,7 +289,7 @@ function ProductDetail() {
     }
 
     return uniqueImages.slice(0, 4);
-  }, [product]);
+  }, [product, selectedVariant?.image]);
 
   const selectedGalleryImage =
     galleryImages.find(
@@ -243,12 +300,16 @@ function ProductDetail() {
 
   const productColors = Array.isArray(product?.colors) ? product.colors : [];
   const productSizes = Array.isArray(product?.sizes) ? product.sizes : [];
+  const activePrice = Number(selectedVariant?.price ?? product?.price ?? 0);
+  const activeOldPrice = Number(
+    selectedVariant?.oldPrice ?? product?.oldPrice ?? 0,
+  );
+  const activeStock = Number(selectedVariant?.stock ?? product?.stock ?? 0);
   const normalizedStatus = String(product?.status ?? "")
     .trim()
     .toLowerCase()
     .replaceAll(" ", "_");
-  const isOutOfStock =
-    Number(product?.stock) <= 0 || normalizedStatus === "out_of_stock";
+  const isOutOfStock = activeStock <= 0 || normalizedStatus === "out_of_stock";
 
   const isCustomerAccount = isCustomer && !isVendor;
   const canPurchase = isCustomerAccount;
@@ -258,25 +319,39 @@ function ProductDetail() {
     (product?.vendorEmail
       ? String(product.vendorEmail).split("@")[0]
       : "L&S Store");
+  const normalizedUserEmail = String(user?.email ?? "")
+    .trim()
+    .toLowerCase();
+  const normalizedUserId = String(user?.id ?? "").trim();
+  const normalizedProductVendorEmail = String(product?.vendorEmail ?? "")
+    .trim()
+    .toLowerCase();
+  const normalizedProductVendorId = String(product?.vendorId ?? "").trim();
   const isVendorOwnerOfProduct =
     isVendor &&
-    String(user?.email ?? "")
-      .trim()
-      .toLowerCase() ===
-      String(product?.vendorEmail ?? "")
-        .trim()
-        .toLowerCase();
+    ((normalizedUserId &&
+      normalizedProductVendorId &&
+      normalizedUserId === normalizedProductVendorId) ||
+      (normalizedUserEmail &&
+        normalizedProductVendorEmail &&
+        normalizedUserEmail === normalizedProductVendorEmail));
   const isPurchaseDisabled = isOutOfStock || isAdmin || isVendorOwnerOfProduct;
   const isFavorite = hasInWishlist(product?.id);
   const isPrimaryProductLoading =
     !product &&
-    (isLoading || (canInspectHiddenProducts && isAdminProductsLoading));
+    (isDetailLoading ||
+      isLoading ||
+      (canInspectHiddenProducts && isAdminProductsLoading));
   const isPrimaryProductSettled =
-    !isLoading && (!canInspectHiddenProducts || !isAdminProductsLoading);
+    !isDetailLoading &&
+    !isLoading &&
+    (!canInspectHiddenProducts || !isAdminProductsLoading);
   const hasPrimaryProductError =
     isError || (canInspectHiddenProducts && isAdminProductsError);
   const shouldShowProductError =
-    !product && hasPrimaryProductError && isPrimaryProductSettled;
+    !product &&
+    (hasPrimaryProductError || isDetailError) &&
+    isPrimaryProductSettled;
   const shouldShowProductNotFound =
     !product && !shouldShowProductError && isPrimaryProductSettled;
   const areRelatedProductsLoading = isLoading && products.length === 0;
@@ -309,7 +384,9 @@ function ProductDetail() {
       return;
     }
 
-    addToCart(product, quantity, {
+    addToCart(product.id, quantity, {
+      variantId: selectedVariant?.id,
+      variantLabel: selectedVariant?.label,
       color: selectedColor,
       size: selectedSize,
     });
@@ -325,7 +402,9 @@ function ProductDetail() {
       return;
     }
 
-    addToCart(product, quantity, {
+    addToCart(product.id, quantity, {
+      variantId: selectedVariant?.id,
+      variantLabel: selectedVariant?.label,
       color: selectedColor,
       size: selectedSize,
     });
@@ -440,16 +519,101 @@ function ProductDetail() {
                   </span>
                 </div>
 
+                {(isDetailLoading || isPrimaryProductLoading) && (
+                  <p className="product-detail-helper">
+                    Đang tải thông tin biến thể...
+                  </p>
+                )}
+
                 <div className="product-info__price">
-                  {currency.format(product.price)}
+                  {currency.format(activePrice)}
                 </div>
+
+                {activeOldPrice > activePrice && (
+                  <p className="product-info__old-price">
+                    {currency.format(activeOldPrice)}
+                  </p>
+                )}
 
                 <p className="product-info__description">
                   {product.description}
                 </p>
                 <p className="product-shop-label">Sold by: {vendorShopLabel}</p>
 
-                {productColors.length > 0 && (
+                {productAttributeEntries.length > 0 && (
+                  <div className="product-meta-card">
+                    <h3>Product information</h3>
+                    <div className="product-meta-list">
+                      {productAttributeEntries.map((item) => (
+                        <div className="product-meta-list__item" key={item.key}>
+                          <span>{item.label}</span>
+                          <strong>{item.value}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {productVariants.length > 0 && (
+                  <div className="product-meta-card">
+                    <h3>Variants</h3>
+                    <div className="product-variant-list">
+                      {productVariants.map((variant) => (
+                        <button
+                          key={variant.id}
+                          type="button"
+                          className={`product-variant-chip ${
+                            selectedVariant?.id === variant.id
+                              ? "is-active"
+                              : ""
+                          }`}
+                          onClick={() =>
+                            setSelectedVariantIdByProduct((previous) => ({
+                              ...previous,
+                              [id]: variant.id,
+                            }))
+                          }
+                        >
+                          <span>{variant.label}</span>
+                          <strong>{currency.format(variant.price)}</strong>
+                        </button>
+                      ))}
+                    </div>
+
+                    {selectedVariant && (
+                      <div className="product-meta-list">
+                        <div className="product-meta-list__item">
+                          <span>Selected variant</span>
+                          <strong>{selectedVariant.label}</strong>
+                        </div>
+                        <div className="product-meta-list__item">
+                          <span>Variant stock</span>
+                          <strong>{activeStock}</strong>
+                        </div>
+                        {variantOptionEntries.map((item) => (
+                          <div
+                            className="product-meta-list__item"
+                            key={item.key}
+                          >
+                            <span>{item.label}</span>
+                            <strong>{item.value}</strong>
+                          </div>
+                        ))}
+                        {variantAttributeEntries.map((item) => (
+                          <div
+                            className="product-meta-list__item"
+                            key={item.key}
+                          >
+                            <span>{item.label}</span>
+                            <strong>{item.value}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {productVariants.length === 0 && productColors.length > 0 && (
                   <div className="option-row">
                     <h3>Colours:</h3>
                     <div className="color-options">
@@ -475,7 +639,7 @@ function ProductDetail() {
                   </div>
                 )}
 
-                {productSizes.length > 0 && (
+                {productVariants.length === 0 && productSizes.length > 0 && (
                   <div className="option-row">
                     <h3>Size:</h3>
                     <div className="size-options">
@@ -516,7 +680,9 @@ function ProductDetail() {
                     <button
                       type="button"
                       onClick={() => {
-                        const currentStock = Number(product?.stock ?? 0);
+                        const currentStock = Number(
+                          selectedVariant?.stock ?? product?.stock ?? 0,
+                        );
                         if (quantity >= currentStock) {
                           setStockMessage(`Chỉ còn ${currentStock} sản phẩm.`);
                           setShowStockModal(true);
