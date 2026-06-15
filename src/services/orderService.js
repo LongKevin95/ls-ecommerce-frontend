@@ -80,7 +80,7 @@ export async function createOrder({
   return normalizeOrder(extractApiPayload(response));
 }
 
-export async function updateOrderStatus(orderId, nextStatus) {
+export async function updateOrderStatus(orderId, nextStatus, reason = "") {
   const normalizedOrderId = String(orderId ?? "").trim();
 
   if (!normalizedOrderId) {
@@ -92,6 +92,26 @@ export async function updateOrderStatus(orderId, nextStatus) {
     : `/vendor/orders/${normalizedOrderId}/status`;
   const response = await apiClient.patch(route, {
     status: nextStatus,
+    reason: String(reason ?? "").trim(),
+  });
+
+  return normalizeOrder(extractApiPayload(response));
+}
+
+export async function cancelMyOrder(orderId, reason) {
+  const normalizedOrderId = String(orderId ?? "").trim();
+  const normalizedReason = String(reason ?? "").trim();
+
+  if (!normalizedOrderId) {
+    throw new Error("KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng Ä‘á»ƒ há»§y.");
+  }
+
+  if (!normalizedReason) {
+    throw new Error("Vui lÃ²ng nháº­p lÃ½ do huá»· Ä‘Æ¡n.");
+  }
+
+  const response = await apiClient.patch(`/orders/${normalizedOrderId}/cancel`, {
+    reason: normalizedReason,
   });
 
   return normalizeOrder(extractApiPayload(response));

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { addProductReview } from "../../api/productApi";
-import { updateOrderById } from "../../api/ordersApi";
+import { cancelMyOrder } from "../../api/ordersApi";
 import Footer from "../../components/Footer";
 import Header from "../../components/Header";
 import { useAuth } from "../../hooks/useAuth";
@@ -243,6 +243,7 @@ export default function MyOrders() {
   const userEmail = String(user?.email ?? "")
     .trim()
     .toLowerCase();
+  const userId = String(user?.id ?? "").trim();
 
   const productMapById = useMemo(
     () =>
@@ -252,12 +253,16 @@ export default function MyOrders() {
 
   const myOrders = useMemo(() => {
     return orders.filter((order) => {
+      const orderCustomerId = String(order?.customerId ?? "").trim();
       const orderEmail = String(order?.customerEmail ?? "")
         .trim()
         .toLowerCase();
-      return orderEmail && orderEmail === userEmail;
+      return (
+        (orderCustomerId && orderCustomerId === userId) ||
+        (orderEmail && orderEmail === userEmail)
+      );
     });
-  }, [orders, userEmail]);
+  }, [orders, userEmail, userId]);
 
   const ordersWithMeta = useMemo(() => {
     return myOrders.map((order) => {
@@ -407,17 +412,9 @@ export default function MyOrders() {
     try {
       setProcessingOrderId(orderId);
 
-      await updateOrderById({
+      await cancelMyOrder({
         id: orderId,
-        actor: "customer",
-        updates: {
-          status: "cancelled",
-          cancellation: {
-            by: "customer",
-            reason,
-            at: new Date().toISOString(),
-          },
-        },
+        reason,
       });
 
       setCancelReasonByOrder((previous) => ({

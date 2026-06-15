@@ -1,31 +1,72 @@
-# L&S Ecommerce Frontend Clean Baseline
+# L&S Ecommerce Frontend
 
-Project này là frontend mới được dựng lại để chuẩn bị cho backend integration.
+React + Vite frontend for the L&S Ecommerce project.
 
-## Mục tiêu
+This app talks to the Express/MongoDB backend and includes customer, vendor,
+and admin flows that were smoke-tested against the real API.
 
-- Giảm coupling giữa UI và business logic
-- Chuẩn hóa auth state để dễ chuyển sang JWT backend
-- Cart chỉ lưu `productId`, `quantity`, `color`, `size`
-- Wishlist chỉ lưu `productId`
-- Checkout chỉ gửi payload tối thiểu
-- Tách service layer để dễ thay mock bằng API thật
+## Tech Stack
 
-## Stack
-
-- React
-- Vite
-- React Router
-- TanStack Query
+- React 19
+- Vite 8
+- React Router 7
+- TanStack Query 5
 - Axios
 - Zod
-- CSS thường
 
-## Chạy project
+## Main Features
+
+- Customer signup and login
+- Product listing, search, product detail
+- Cart, checkout, wishlist
+- My Orders page with order tracking
+- Product review after a completed purchase
+- Vendor review replies on product detail
+- Vendor dashboard for products, orders, and profile
+- Admin dashboard for products, orders, and account management
+
+## Project Structure
+
+- `src/main.jsx`: app bootstrap and providers
+- `src/App.jsx`: root app shell
+- `src/routes/*`: public/private/role-based routing
+- `src/contexts/*`: auth, cart, theme, and wishlist state
+- `src/pages/*`: customer, auth, vendor, admin, and account screens
+- `src/api/*`: API-facing modules
+- `src/services/*`: request helpers and API wrappers
+- `src/adapters/*`: response normalization
+- `src/components/*`: shared UI
+
+## Environment
+
+Copy `.env.example` to `.env` before starting the app:
+
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8080
+```
+
+If `VITE_API_BASE_URL` is empty, the app falls back to `http://localhost:5000`.
+For this project, the backend was tested on port `8080`, so set the variable
+explicitly to avoid confusion.
+
+## Local Development
 
 ```bash
 npm install
 npm run dev
+```
+
+Default Vite URL:
+
+- `http://localhost:5173`
+
+## Available Scripts
+
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run preview
 ```
 
 ## Build
@@ -34,42 +75,23 @@ npm run dev
 npm run build
 ```
 
-## ENV
+## Tested Integration
 
-```env
-VITE_API_BASE_URL=
-```
+The current frontend was manually tested against the backend for:
 
-## Cấu trúc chính
+- signup and login
+- homepage and product detail loading
+- add to cart and checkout
+- customer order tracking
+- vendor create/update/delete product
+- admin product approval and account status updates
+- completed-order review submission
+- vendor reply to a customer review
 
-- `src/app/*`: route, page, layout cho runtime mới
-- `src/providers/*`: auth, cart, wishlist providers
-- `src/services/*`: nơi sẽ thay dần sang gọi backend thật
-- `src/api/mockStore.js`: mock local store tạm thời
-- `src/mocks/mockData.js`: seed data demo
+## Notes
 
-## Tài liệu API contract
-
-Xem chi tiết tại:
-
-- [`docs/api-contract.md`](./docs/api-contract.md)
-
-File này mô tả:
-
-- request/response mẫu cho auth, users, products, orders
-- enum chuẩn giữa frontend và backend
-- mapping từ frontend service sang backend endpoint
-- gợi ý authorization theo role
-
-## Hướng chuyển sang backend thật
-
-Khi bắt đầu làm Express backend, ưu tiên thay dần các file sau:
-
-- `src/services/authService.js`
-- `src/services/userService.js`
-- `src/services/productService.js`
-- `src/services/orderService.js`
-
-## Ghi chú
-
-Hiện tại app vẫn chạy bằng mock local store để hoàn thiện frontend trước. Khi backend sẵn sàng, frontend có thể đổi sang API thật mà không cần viết lại toàn bộ UI.
+- Routing uses `HashRouter`, which also helps when deploying to static hosting.
+- Legacy files under old cleanup-only paths were removed to match the current
+  runtime structure.
+- The main production risk left on the frontend is bundle size; route-based
+  code splitting would be a good next optimization pass.

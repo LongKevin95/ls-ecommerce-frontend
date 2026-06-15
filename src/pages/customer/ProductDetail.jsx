@@ -384,7 +384,7 @@ function ProductDetail() {
       return;
     }
 
-    addToCart(product.id, quantity, {
+    addToCart(product, quantity, {
       variantId: selectedVariant?.id,
       variantLabel: selectedVariant?.label,
       color: selectedColor,
@@ -402,7 +402,7 @@ function ProductDetail() {
       return;
     }
 
-    addToCart(product.id, quantity, {
+    addToCart(product, quantity, {
       variantId: selectedVariant?.id,
       variantLabel: selectedVariant?.label,
       color: selectedColor,
@@ -412,11 +412,17 @@ function ProductDetail() {
     navigate("/checkout");
   };
 
-  const handleWishlist = () => {
+  const handleWishlist = async () => {
     if (!requireCustomerAccess()) return;
 
-    const added = toggleWishlistItem(product);
-    window.alert(added ? "Đã thêm vào wishlist." : "Đã xóa khỏi wishlist.");
+    try {
+      const added = await toggleWishlistItem(product);
+      window.alert(
+        added ? "Đã thêm vào wishlist." : "Đã xóa khỏi wishlist.",
+      );
+    } catch (error) {
+      window.alert(error?.message ?? "Khong the cap nhat wishlist.");
+    }
   };
 
   const handleVendorReply = async (reviewItem) => {

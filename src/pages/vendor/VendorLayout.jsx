@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../hooks/useAuth";
 import "./VendorLayout.css";
@@ -24,19 +24,20 @@ function resolveTitle(pathname) {
 
 export default function VendorLayout() {
   const location = useLocation();
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { logout, user } = useAuth();
 
   const title = resolveTitle(location.pathname);
   const displayName = user?.name || user?.email || "Vendor";
   const avatarLetter = displayName.trim().charAt(0).toUpperCase() || "V";
 
   const handleLogout = () => {
-    window.sessionStorage.setItem("ls-ecommerce-logout", "1");
-    window.location.assign("/");
+    logout();
+    navigate("/");
   };
 
   const handleGoHomepage = () => {
-    window.location.assign("/");
+    navigate("/");
   };
 
   return (

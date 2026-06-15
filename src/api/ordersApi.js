@@ -1,5 +1,5 @@
-import { fetchResourceDocument, updateResourceData } from "./resourceApi";
 import {
+  cancelMyOrder as cancelMyOrderService,
   createOrder as createOrderService,
   getAllOrders as getAllOrdersService,
   getOrdersByCustomerId as getOrdersByCustomerIdService,
@@ -12,8 +12,6 @@ import {
   getProductsByVendorId as getProductsByVendorIdService,
 } from "../services/productService";
 import { readAuthSession } from "../utils/authStorage";
-
-const ORDERS_RESOURCE_NAME = "ecommerce-data";
 
 const FINAL_STATUSES = new Set(["completed", "cancelled"]);
 
@@ -249,48 +247,6 @@ function _appendStatusHistory(order, nextStatus, actor, updatedAt) {
   ];
 }
 
-function resolveOrdersSnapshot(dataItem) {
-  if (Array.isArray(dataItem?.orders)) {
-    return {
-      payload: dataItem,
-      orders: dataItem.orders,
-      dataId: dataItem?._id ?? null,
-    };
-  }
-
-  const nestedList = Array.isArray(dataItem?.data) ? dataItem.data : [];
-  const nestedItem = nestedList.find((item) => Array.isArray(item?.orders));
-
-  if (!nestedItem) {
-    return null;
-  }
-
-  return {
-    payload: nestedItem,
-    orders: nestedItem.orders,
-    dataId: dataItem?._id ?? null,
-  };
-}
-
-async function fetchOrdersSnapshot() {
-  const document = await fetchResourceDocument(ORDERS_RESOURCE_NAME);
-  const dataList = Array.isArray(document?.data) ? document.data : [];
-
-  for (let index = dataList.length - 1; index >= 0; index -= 1) {
-    const snapshot = resolveOrdersSnapshot(dataList[index]);
-
-    if (snapshot) {
-      return snapshot;
-    }
-  }
-
-  return {
-    payload: {},
-    orders: [],
-    dataId: null,
-  };
-}
-
 function normalizeOrder(order) {
   const items = Array.isArray(order?.items)
     ? order.items
@@ -315,6 +271,7 @@ function normalizeOrder(order) {
 
   return {
     id: String(order?.id ?? order?._id ?? `o-${Date.now()}`),
+    customerId: normalizeText(order?.customerId ?? ""),
     customerEmail,
     customerName,
     contactEmail,
@@ -351,20 +308,6 @@ function normalizeOrder(order) {
     createdAt: order?.createdAt ?? new Date().toISOString(),
     updatedAt: order?.updatedAt ?? order?.createdAt ?? new Date().toISOString(),
   };
-}
-
-async function _persistOrders(nextOrders, snapshot) {
-  const resolvedSnapshot = snapshot ?? (await fetchOrdersSnapshot());
-  const { payload, dataId } = resolvedSnapshot;
-
-  await updateResourceData({
-    resourceName: ORDERS_RESOURCE_NAME,
-    dataId,
-    payload: {
-      ...(payload ?? {}),
-      orders: nextOrders.map(normalizeOrder),
-    },
-  });
 }
 
 export const getOrders = async () => {
@@ -443,9 +386,33 @@ export const updateOrderById = async ({ id, updates, actor }) => {
     );
   }
 
-  const nextOrder = await updateOrderStatusService(id, normalizedStatus);
+  const nextOrder = await updateOrderStatusService(
+    id,
+    normalizedStatus,
+    updates?.reason ?? updates?.cancellation?.reason,
+  );
   return normalizeOrder({
     ...updates,
     ...nextOrder,
   });
+};
+
+export const cancelMyOrder = async ({ id, reason }) => {
+  const normalizedOrderId = normalizeText(id);
+  const normalizedReason = normalizeText(reason);
+
+  if (!normalizedOrderId) {
+    throw new Error("Missing order id.");
+  }
+
+  if (!normalizedReason) {
+    throw new Error("Missing cancellation reason.");
+  }
+
+  const nextOrder = await cancelMyOrderService(
+    normalizedOrderId,
+    normalizedReason,
+  );
+
+  return normalizeOrder(nextOrder);
 };

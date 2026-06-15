@@ -1,3 +1,4 @@
+import apiClient, { extractApiPayload } from "./apiClient";
 import { getUsers as getUsersService } from "../services/userService";
 import { readAuthSession } from "../utils/authStorage";
 import { getShops } from "./shopsApi";
@@ -38,8 +39,11 @@ function normalizePublicUserFromShop(shop) {
 
 export const getUsers = async () => {
   const currentSession = readAuthSession();
+  const currentRoles = Array.isArray(currentSession?.user?.roles)
+    ? currentSession.user.roles
+    : [];
 
-  if (!currentSession?.accessToken) {
+  if (!currentSession?.accessToken || !currentRoles.includes("admin")) {
     const shops = await getShops().catch(() => []);
     return shops.map(normalizePublicUserFromShop);
   }
@@ -72,20 +76,53 @@ export const getUsers = async () => {
   }
 };
 
-export const updateVendorStatus = async () => {
-  throw new Error(
-    "Backend hiện chưa hỗ trợ admin cập nhật trạng thái vendor từ frontend này.",
+export const updateVendorStatus = async ({ userId, status }) => {
+  const normalizedUserId = String(userId ?? "").trim();
+
+  if (!normalizedUserId) {
+    throw new Error("Missing vendor id.");
+  }
+
+  const normalizedStatus = String(status ?? "").trim().toLowerCase();
+
+  if (!["active", "rejected"].includes(normalizedStatus)) {
+    throw new Error("Vendor status is invalid.");
+  }
+
+  const response = await apiClient.patch(
+    `/admin/users/${normalizedUserId}/status`,
+    {
+      status: normalizedStatus,
+    },
   );
+
+  return extractApiPayload(response);
 };
 
-export const updateCustomerStatus = async () => {
-  throw new Error(
-    "Backend hiện chưa hỗ trợ admin cập nhật trạng thái customer từ frontend này.",
+export const updateCustomerStatus = async ({ userId, status }) => {
+  const normalizedUserId = String(userId ?? "").trim();
+
+  if (!normalizedUserId) {
+    throw new Error("Missing customer id.");
+  }
+
+  const response = await apiClient.patch(
+    `/admin/users/${normalizedUserId}/status`,
+    {
+      status,
+    },
   );
+
+  return extractApiPayload(response);
 };
 
-export const deleteUserAccount = async () => {
-  throw new Error(
-    "Backend hiện chưa hỗ trợ xoá tài khoản từ frontend quản trị này.",
-  );
+export const deleteUserAccount = async ({ userId }) => {
+  const normalizedUserId = String(userId ?? "").trim();
+
+  if (!normalizedUserId) {
+    throw new Error("Missing user id.");
+  }
+
+  const response = await apiClient.delete(`/admin/users/${normalizedUserId}`);
+  return extractApiPayload(response);
 };

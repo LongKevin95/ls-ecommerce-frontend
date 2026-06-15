@@ -1,17 +1,15 @@
-import { fetchResourceDocument, updateResourceData } from "./resourceApi";
-import { syncShopsFromProducts } from "./shopsApi";
 import {
+  addProductReview as addProductReviewService,
   createVendorProduct as createVendorProductService,
   deleteProductById as deleteProductByIdService,
   getAdminProducts as getAdminProductsService,
   getProductById as getProductByIdService,
   getProducts as getProductsService,
   getProductsByVendorId as getProductsByVendorIdService,
+  upsertVendorReply as upsertVendorReplyService,
   updateProductById as updateProductByIdService,
 } from "../services/productService";
 import { readAuthSession } from "../utils/authStorage";
-
-const PRODUCTS_RESOURCE_NAME = "ecommerce-data";
 
 export const PRODUCT_STATUS = {
   ACTIVE: "active",
@@ -239,47 +237,6 @@ function deriveVendorEmail(product) {
   return "";
 }
 
-function resolveProductsSnapshot(dataItem) {
-  if (Array.isArray(dataItem?.products)) {
-    return {
-      payload: dataItem,
-      products: dataItem.products,
-      dataId: dataItem?._id ?? null,
-    };
-  }
-
-  const nestedList = Array.isArray(dataItem?.data) ? dataItem.data : [];
-  const nestedItem = nestedList.find((item) => Array.isArray(item?.products));
-
-  if (!nestedItem) {
-    return null;
-  }
-
-  return {
-    payload: nestedItem,
-    products: nestedItem.products,
-    dataId: dataItem?._id ?? null,
-  };
-}
-
-async function fetchProductsSnapshot() {
-  const document = await fetchResourceDocument(PRODUCTS_RESOURCE_NAME);
-  const dataList = Array.isArray(document?.data) ? document.data : [];
-
-  for (let index = dataList.length - 1; index >= 0; index -= 1) {
-    const snapshot = resolveProductsSnapshot(dataList[index]);
-
-    if (snapshot) {
-      return snapshot;
-    }
-  }
-
-  return {
-    products: [],
-    dataId: null,
-  };
-}
-
 function normalizeProduct(product) {
   const reviewsData = Array.isArray(product?.reviewsData)
     ? product.reviewsData
@@ -445,58 +402,6 @@ function normalizeProduct(product) {
   };
 }
 
-function _hasShopAggregationImpact(currentProduct, nextProduct) {
-  const currentVendorEmail = String(currentProduct?.vendorEmail ?? "")
-    .trim()
-    .toLowerCase();
-  const nextVendorEmail = String(nextProduct?.vendorEmail ?? "")
-    .trim()
-    .toLowerCase();
-  const currentCategory = String(currentProduct?.category ?? "")
-    .trim()
-    .toLowerCase();
-  const nextCategory = String(nextProduct?.category ?? "")
-    .trim()
-    .toLowerCase();
-  const currentShopName = String(currentProduct?.shopName ?? "").trim();
-  const nextShopName = String(nextProduct?.shopName ?? "").trim();
-  const currentStock = Number(currentProduct?.stock ?? 0);
-  const nextStock = Number(nextProduct?.stock ?? 0);
-
-  return (
-    currentVendorEmail !== nextVendorEmail ||
-    currentCategory !== nextCategory ||
-    currentShopName !== nextShopName ||
-    currentStock !== nextStock
-  );
-}
-
-async function writeProductsSnapshot(
-  snapshot,
-  nextProducts,
-  { syncShops = true } = {},
-) {
-  const { payload, dataId } = snapshot;
-
-  await updateResourceData({
-    resourceName: PRODUCTS_RESOURCE_NAME,
-    dataId,
-    payload: {
-      ...(payload ?? {}),
-      products: nextProducts,
-    },
-  });
-
-  if (syncShops) {
-    void syncShopsFromProducts(nextProducts).catch(() => null);
-  }
-}
-
-async function persistProducts(nextProducts, snapshot, options) {
-  const resolvedSnapshot = snapshot ?? (await fetchProductsSnapshot());
-  await writeProductsSnapshot(resolvedSnapshot, nextProducts, options);
-}
-
 export const getAllProducts = async () => {
   const roles = Array.isArray(readCurrentUser()?.roles)
     ? readCurrentUser().roles
@@ -606,63 +511,22 @@ export const addProductReview = async ({ productId, review }) => {
     throw new Error("Review is missing required fields.");
   }
 
-  const snapshot = await fetchProductsSnapshot();
-  const { products } = snapshot;
-  let updatedProduct = null;
-
-  const nextProducts = products.map((product) => {
-    if (String(product?.id) !== normalizedProductId) {
-      return product;
-    }
-
-    const previousReviews = Array.isArray(product?.reviewsData)
-      ? product.reviewsData
-      : [];
-
-    const existedReview = previousReviews.some(
-      (item) =>
-        String(item?.customerEmail ?? "")
-          .trim()
-          .toLowerCase() === normalizedReview.customerEmail,
-    );
-
-    if (existedReview) {
-      throw new Error("Moi tai khoan chi duoc review san pham nay 1 lan.");
-    }
-
-    const nextItem = normalizeProduct({
-      ...product,
-      reviewsData: [...previousReviews, normalizedReview],
-      updatedAt: new Date().toISOString(),
-    });
-
-    updatedProduct = nextItem;
-    return nextItem;
-  });
-
-  if (!updatedProduct) {
-    throw new Error("Product not found.");
-  }
-
-  await persistProducts(nextProducts, snapshot, {
-    syncShops: false,
-  });
-  return updatedProduct;
+  const updatedProduct = await addProductReviewService(
+    normalizedProductId,
+    normalizedReview,
+  );
+  return normalizeProduct(updatedProduct);
 };
 
 export const upsertVendorReply = async ({
   productId,
   reviewCreatedAt,
   customerEmail,
-  vendorEmail,
   replyText,
 }) => {
   const normalizedProductId = String(productId ?? "").trim();
   const normalizedReviewCreatedAt = String(reviewCreatedAt ?? "").trim();
   const normalizedCustomerEmail = String(customerEmail ?? "")
-    .trim()
-    .toLowerCase();
-  const normalizedVendorEmail = String(vendorEmail ?? "")
     .trim()
     .toLowerCase();
   const normalizedReplyText = String(replyText ?? "").trim();
@@ -671,69 +535,15 @@ export const upsertVendorReply = async ({
     !normalizedProductId ||
     !normalizedReviewCreatedAt ||
     !normalizedCustomerEmail ||
-    !normalizedVendorEmail ||
     !normalizedReplyText
   ) {
     throw new Error("Missing required fields for vendor reply.");
   }
 
-  const snapshot = await fetchProductsSnapshot();
-  const { products } = snapshot;
-  let updatedProduct = null;
-
-  const nextProducts = products.map((product) => {
-    if (String(product?.id) !== normalizedProductId) {
-      return product;
-    }
-
-    const productVendorEmail = String(product?.vendorEmail ?? "")
-      .trim()
-      .toLowerCase();
-
-    if (productVendorEmail !== normalizedVendorEmail) {
-      throw new Error("Vendor khong co quyen tra loi review san pham nay.");
-    }
-
-    const previousReviews = Array.isArray(product?.reviewsData)
-      ? product.reviewsData
-      : [];
-
-    const nextReviews = previousReviews.map((reviewItem) => {
-      const isMatchedReview =
-        String(reviewItem?.createdAt ?? "") === normalizedReviewCreatedAt &&
-        String(reviewItem?.customerEmail ?? "")
-          .trim()
-          .toLowerCase() === normalizedCustomerEmail;
-
-      if (!isMatchedReview) {
-        return reviewItem;
-      }
-
-      return {
-        ...reviewItem,
-        vendorReply: {
-          text: normalizedReplyText,
-          at: new Date().toISOString(),
-        },
-      };
-    });
-
-    const nextItem = normalizeProduct({
-      ...product,
-      reviewsData: nextReviews,
-      updatedAt: new Date().toISOString(),
-    });
-
-    updatedProduct = nextItem;
-    return nextItem;
+  const updatedProduct = await upsertVendorReplyService(normalizedProductId, {
+    reviewCreatedAt: normalizedReviewCreatedAt,
+    customerEmail: normalizedCustomerEmail,
+    replyText: normalizedReplyText,
   });
-
-  if (!updatedProduct) {
-    throw new Error("Product not found.");
-  }
-
-  await persistProducts(nextProducts, snapshot, {
-    syncShops: false,
-  });
-  return updatedProduct;
+  return normalizeProduct(updatedProduct);
 };

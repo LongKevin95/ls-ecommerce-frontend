@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../hooks/useAuth";
 import "./AdminLayout.css";
@@ -24,23 +24,24 @@ function resolveTitle(pathname) {
 
 export default function AdminLayout() {
   const location = useLocation();
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { logout, user } = useAuth();
   const title = resolveTitle(location.pathname);
   const displayName = user?.name || user?.email || "Admin";
   const avatarLetter = displayName.trim().charAt(0).toUpperCase() || "A";
   const roleLabel = user?.roles?.includes("admin") ? "Admin" : "User";
 
   const handleLogout = () => {
-    window.sessionStorage.setItem("ls-ecommerce-logout", "1");
-    window.location.assign("/");
+    logout();
+    navigate("/");
   };
 
   const handleGoHomepage = () => {
-    window.location.assign("/");
+    navigate("/");
   };
 
   const handleGoProfile = () => {
-    window.location.assign("/#/profile");
+    navigate("/profile");
   };
 
   return (

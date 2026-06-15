@@ -73,7 +73,7 @@ export default function Wishlist() {
     }
   }, [canUseWishlist, navigate, user]);
 
-  const handleMoveToCart = (item) => {
+  const handleMoveToCart = async (item) => {
     if (!canUseWishlist) {
       return;
     }
@@ -94,7 +94,27 @@ export default function Wishlist() {
       },
     );
 
-    removeFromWishlist(item.productId);
+    try {
+      await removeFromWishlist(item.productId);
+    } catch (error) {
+      window.alert(error?.message ?? "Khong the cap nhat wishlist.");
+    }
+  };
+
+  const handleClearWishlist = async () => {
+    try {
+      await clearWishlist();
+    } catch (error) {
+      window.alert(error?.message ?? "Khong the xoa wishlist.");
+    }
+  };
+
+  const handleRemoveWishlistItem = async (productId) => {
+    try {
+      await removeFromWishlist(productId);
+    } catch (error) {
+      window.alert(error?.message ?? "Khong the xoa san pham khoi wishlist.");
+    }
   };
 
   return (
@@ -111,7 +131,7 @@ export default function Wishlist() {
           <button
             type="button"
             className="wishlist-clear-btn"
-            onClick={clearWishlist}
+            onClick={handleClearWishlist}
           >
             Clear all
           </button>
@@ -166,7 +186,7 @@ export default function Wishlist() {
                 <button
                   type="button"
                   className="wishlist-card__remove"
-                  onClick={() => removeFromWishlist(item.productId)}
+                  onClick={() => handleRemoveWishlistItem(item.productId)}
                 >
                   Remove
                 </button>

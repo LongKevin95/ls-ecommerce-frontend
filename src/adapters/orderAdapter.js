@@ -2,6 +2,14 @@ export function normalizeOrder(order) {
   return {
     id: String(order?.id ?? ""),
     customerId: String(order?.customerId ?? ""),
+    customerEmail: String(order?.customerEmail ?? "")
+      .trim()
+      .toLowerCase(),
+    customerName: String(order?.customerName ?? "").trim(),
+    contactEmail: String(order?.contactEmail ?? "")
+      .trim()
+      .toLowerCase(),
+    customerPhone: String(order?.customerPhone ?? "").trim(),
     status: String(order?.status ?? "pending")
       .trim()
       .toLowerCase(),
@@ -33,6 +41,29 @@ export function normalizeOrder(order) {
           sku: String(item?.sku ?? "").trim(),
           color: String(item?.color ?? "Default").trim(),
           size: String(item?.size ?? "Default").trim(),
+        }))
+      : [],
+    cancellation:
+      order?.cancellation && typeof order.cancellation === "object"
+        ? {
+            by: String(order.cancellation?.by ?? "").trim().toLowerCase(),
+            reason: String(order.cancellation?.reason ?? "").trim(),
+            at: order.cancellation?.at ?? null,
+          }
+        : null,
+    statusHistory: Array.isArray(order?.statusHistory)
+      ? order.statusHistory.map((entry) => ({
+          fromStatus:
+            entry?.fromStatus === null || entry?.fromStatus === undefined
+              ? null
+              : String(entry.fromStatus).trim().toLowerCase(),
+          toStatus: String(entry?.toStatus ?? entry?.status ?? "pending")
+            .trim()
+            .toLowerCase(),
+          by: String(entry?.by ?? entry?.updatedBy ?? "system")
+            .trim()
+            .toLowerCase(),
+          at: entry?.at ?? null,
         }))
       : [],
     total: Number(order?.total ?? 0),

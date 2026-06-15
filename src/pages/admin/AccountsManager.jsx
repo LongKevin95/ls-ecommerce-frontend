@@ -213,12 +213,13 @@ export default function AccountsManager() {
   }, [currentPage, totalPages]);
 
   async function handleUpdateStatus(account, status) {
+    const normalizedUserId = String(account?.id ?? "").trim();
     const normalizedEmail = String(account?.email ?? "")
       .trim()
       .toLowerCase();
     const reason = getReasonValue(account).trim();
 
-    if (!normalizedEmail) {
+    if (!normalizedUserId || !normalizedEmail) {
       return;
     }
 
@@ -238,9 +239,13 @@ export default function AccountsManager() {
       setProcessingEmail(normalizedEmail);
 
       if (account.role === "vendor") {
-        await updateVendorStatus({ email: normalizedEmail, status, reason });
+        await updateVendorStatus({ userId: normalizedUserId, status, reason });
       } else {
-        await updateCustomerStatus({ email: normalizedEmail, status, reason });
+        await updateCustomerStatus({
+          userId: normalizedUserId,
+          status,
+          reason,
+        });
       }
 
       if (status === "active") {

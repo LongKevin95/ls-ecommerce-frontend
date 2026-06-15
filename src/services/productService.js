@@ -98,3 +98,47 @@ export async function deleteProductById(productId) {
   await apiClient.delete(`/vendor/products/${normalizedProductId}`);
   return { id: normalizedProductId };
 }
+
+export async function addProductReview(productId, review = {}) {
+  const normalizedProductId = String(productId ?? "").trim();
+
+  if (!normalizedProductId) {
+    throw new Error("Missing product id.");
+  }
+
+  const response = await apiClient.post(`/products/${normalizedProductId}/reviews`, {
+    customerName: String(review?.customerName ?? "").trim(),
+    comment: String(review?.comment ?? "").trim(),
+    stars: Math.min(5, Math.max(1, Number(review?.stars ?? 0))),
+  });
+
+  return extractApiPayload(response);
+}
+
+export async function upsertVendorReply(
+  productId,
+  {
+    reviewCreatedAt,
+    customerEmail,
+    replyText,
+  } = {},
+) {
+  const normalizedProductId = String(productId ?? "").trim();
+
+  if (!normalizedProductId) {
+    throw new Error("Missing product id.");
+  }
+
+  const response = await apiClient.patch(
+    `/products/${normalizedProductId}/reviews/reply`,
+    {
+      reviewCreatedAt: String(reviewCreatedAt ?? "").trim(),
+      customerEmail: String(customerEmail ?? "")
+        .trim()
+        .toLowerCase(),
+      replyText: String(replyText ?? "").trim(),
+    },
+  );
+
+  return extractApiPayload(response);
+}
