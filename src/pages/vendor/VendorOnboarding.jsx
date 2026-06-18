@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import qrCode from "../../assets/Images/qr-code.jpg";
 
 import { useAuth } from "../../hooks/useAuth";
 import "./VendorOnboarding.css";
@@ -20,19 +19,44 @@ const emptyAddress = {
   detail: "",
 };
 
+const emptyIdentityInfo = {
+  legalName: "",
+  idNumber: "",
+  issuedDate: "",
+  issuedPlace: "",
+};
+
+const emptyTaxInfo = {
+  businessType: "Cá nhân",
+  registeredAddress: "",
+  invoiceEmail: "",
+  taxCode: "",
+};
+
 export default function VendorOnboarding() {
-  const { updateRole } = useAuth();
+  const { user, updateRole } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [showAddressModal, setShowAddressModal] = useState(false);
-  const [shopInfo, setShopInfo] = useState({
-    name: "",
-    email: "",
-    phone: "",
-  });
+  const [shopInfo, setShopInfo] = useState(() => ({
+    name: String(user?.shopName ?? user?.name ?? "").trim(),
+    email: String(user?.email ?? "").trim(),
+    phone: String(user?.phone ?? "").trim(),
+  }));
   const [pickupAddress, setPickupAddress] = useState(emptyAddress);
   const [addressDraft, setAddressDraft] = useState(emptyAddress);
+  const [identityInfo, setIdentityInfo] = useState(emptyIdentityInfo);
+  const [taxInfo, setTaxInfo] = useState(() => ({
+    ...emptyTaxInfo,
+    invoiceEmail: String(user?.email ?? "").trim(),
+  }));
   const [errorMessage, setErrorMessage] = useState("");
+
+  const clearErrorMessage = () => {
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  };
 
   const addressLabel = useMemo(() => {
     if (!pickupAddress.fullName) {
@@ -55,9 +79,7 @@ export default function VendorOnboarding() {
   const handleShopInfoChange = (event) => {
     const { name, value } = event.target;
     setShopInfo((prev) => ({ ...prev, [name]: value }));
-    if (errorMessage) {
-      setErrorMessage("");
-    }
+    clearErrorMessage();
   };
 
   const handleOpenModal = () => {
@@ -72,6 +94,7 @@ export default function VendorOnboarding() {
   const handleAddressChange = (event) => {
     const { name, value } = event.target;
     setAddressDraft((prev) => ({ ...prev, [name]: value }));
+    clearErrorMessage();
   };
 
   const handleSaveAddress = () => {
@@ -84,6 +107,19 @@ export default function VendorOnboarding() {
 
     setPickupAddress(addressDraft);
     setShowAddressModal(false);
+    clearErrorMessage();
+  };
+
+  const handleIdentityChange = (event) => {
+    const { name, value } = event.target;
+    setIdentityInfo((prev) => ({ ...prev, [name]: value }));
+    clearErrorMessage();
+  };
+
+  const handleTaxChange = (event) => {
+    const { name, value } = event.target;
+    setTaxInfo((prev) => ({ ...prev, [name]: value }));
+    clearErrorMessage();
   };
 
   const handleNextFromShop = () => {
@@ -101,13 +137,37 @@ export default function VendorOnboarding() {
   };
 
   const handleFinishTax = () => {
+    const isValid = Object.values(taxInfo).every((value) =>
+      String(value ?? "").trim(),
+    );
+
+    if (!isValid) {
+      setErrorMessage("Vui lòng nhập đầy đủ thông tin thuế trước khi hoàn tất.");
+      return;
+    }
+
     setCurrentStep(4);
   };
 
-  const handleAddProduct = async () => {
+  const handleNextFromIdentity = () => {
+    const isValid = Object.values(identityInfo).every((value) =>
+      String(value ?? "").trim(),
+    );
+
+    if (!isValid) {
+      setErrorMessage(
+        "Vui lòng nhập đầy đủ thông tin định danh trước khi tiếp tục.",
+      );
+      return;
+    }
+
+    setCurrentStep(3);
+  };
+
+  const handleEnterVendorCenter = async () => {
     try {
       await updateRole("vendor");
-      navigate("/vendor/products");
+      navigate("/vendor");
     } catch (error) {
       window.alert(
         error?.message ?? "Chưa thể hoàn tất đăng ký. Vui lòng thử lại.",
@@ -260,7 +320,10 @@ export default function VendorOnboarding() {
               <button
                 type="button"
                 className="btn-primary"
-                onClick={() => setCurrentStep(2)}
+                onClick={() => {
+                  clearErrorMessage();
+                  setCurrentStep(2);
+                }}
               >
                 Tiếp theo
               </button>
@@ -269,19 +332,52 @@ export default function VendorOnboarding() {
         )}
 
         {currentStep === 2 && (
-          <section className="vendor-card vendor-card--center">
+          <section className="vendor-card">
             <div className="vendor-info">
-              Đây chỉ là giao diện tượng trưng, chưa làm chức năng xử lý!!!
+              Vui lòng nhập đủ thông tin định danh cơ bản để tiếp tục.
             </div>
-            <div className="vendor-identity">
-              <div className="qr-box">
-                <img className="qr-code" src={qrCode} alt="QR Code" />
-              </div>
-              <ul>
-                <li>Vui lòng quét mã QR để hoàn tất cập nhật thông tin.</li>
-                <li>Đảm bảo bạn đã đăng nhập ứng dụng Shopee.</li>
-              </ul>
+            <div className="vendor-tax">
+              <label>
+                Họ và tên theo giấy tờ
+                <input
+                  name="legalName"
+                  type="text"
+                  placeholder="Nhập họ và tên"
+                  value={identityInfo.legalName}
+                  onChange={handleIdentityChange}
+                />
+              </label>
+              <label>
+                Số CCCD/CMND
+                <input
+                  name="idNumber"
+                  type="text"
+                  placeholder="Nhập số giấy tờ"
+                  value={identityInfo.idNumber}
+                  onChange={handleIdentityChange}
+                />
+              </label>
+              <label>
+                Ngày cấp
+                <input
+                  name="issuedDate"
+                  type="date"
+                  value={identityInfo.issuedDate}
+                  onChange={handleIdentityChange}
+                />
+              </label>
+              <label>
+                Nơi cấp
+                <input
+                  name="issuedPlace"
+                  type="text"
+                  placeholder="Nhập nơi cấp"
+                  value={identityInfo.issuedPlace}
+                  onChange={handleIdentityChange}
+                />
+              </label>
             </div>
+            {errorMessage && <p className="vendor-error">{errorMessage}</p>}
             <div className="vendor-actions vendor-actions--split">
               <button
                 type="button"
@@ -293,7 +389,7 @@ export default function VendorOnboarding() {
               <button
                 type="button"
                 className="btn-primary"
-                onClick={() => setCurrentStep(3)}
+                onClick={handleNextFromIdentity}
               >
                 Tiếp theo
               </button>
@@ -304,31 +400,54 @@ export default function VendorOnboarding() {
         {currentStep === 3 && (
           <section className="vendor-card">
             <div className="vendor-info">
-              Đây chỉ là giao diện tượng trưng, chưa làm chức năng xử lý!!!
+              Vui lòng nhập đủ thông tin thuế để hoàn tất đăng ký.
             </div>
             <div className="vendor-tax">
               <label>
                 Loại hình kinh doanh
                 <span> </span>
-                <select>
-                  <option>Cá nhân</option>
-                  <option>Hộ kinh doanh</option>
-                  <option>Công ty</option>
+                <select
+                  name="businessType"
+                  value={taxInfo.businessType}
+                  onChange={handleTaxChange}
+                >
+                  <option value="Cá nhân">Cá nhân</option>
+                  <option value="Hộ kinh doanh">Hộ kinh doanh</option>
+                  <option value="Công ty">Công ty</option>
                 </select>
               </label>
               <label>
                 Địa chỉ đăng ký kinh doanh<span> </span>
-                <input type="text" placeholder="Nhập địa chỉ" />
+                <input
+                  name="registeredAddress"
+                  type="text"
+                  placeholder="Nhập địa chỉ"
+                  value={taxInfo.registeredAddress}
+                  onChange={handleTaxChange}
+                />
               </label>
               <label>
                 Email nhận hóa đơn điện tử<span> </span>
-                <input type="email" placeholder="Nhập email" />
+                <input
+                  name="invoiceEmail"
+                  type="email"
+                  placeholder="Nhập email"
+                  value={taxInfo.invoiceEmail}
+                  onChange={handleTaxChange}
+                />
               </label>
               <label>
                 Mã số thuế<span> </span>
-                <input type="text" placeholder="Nhập mã số thuế" />
+                <input
+                  name="taxCode"
+                  type="text"
+                  placeholder="Nhập mã số thuế"
+                  value={taxInfo.taxCode}
+                  onChange={handleTaxChange}
+                />
               </label>
             </div>
+            {errorMessage && <p className="vendor-error">{errorMessage}</p>}
             <div className="vendor-actions vendor-actions--split">
               <button
                 type="button"
@@ -359,9 +478,9 @@ export default function VendorOnboarding() {
               <button
                 type="button"
                 className="btn-primary"
-                onClick={handleAddProduct}
+                onClick={handleEnterVendorCenter}
               >
-                Thêm sản phẩm
+                Vào Vendor Center
               </button>
             </div>
           </section>

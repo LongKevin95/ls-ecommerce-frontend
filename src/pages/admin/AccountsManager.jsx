@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { updateCustomerStatus, updateVendorStatus } from "../../api/usersApi";
+import {
+  updateCustomerStatus,
+  updateVendorStatus,
+  USERS_QUERY_SCOPE,
+} from "../../api/usersApi";
 import { useUsersQuery } from "../../hooks/useUsersQuery";
 import "./VendorManager.css";
 
@@ -121,7 +125,9 @@ function XIcon() {
 
 export default function AccountsManager() {
   const queryClient = useQueryClient();
-  const { data: users = [], isLoading, isError } = useUsersQuery();
+  const { data: users = [], isLoading, isError } = useUsersQuery({
+    scope: USERS_QUERY_SCOPE.ADMIN,
+  });
   const [processingEmail, setProcessingEmail] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [keyword, setKeyword] = useState("");

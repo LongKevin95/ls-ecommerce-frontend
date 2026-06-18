@@ -6,7 +6,11 @@ import {
   updateUserProfile,
   updateUserRole,
 } from "../api/authApi";
-import { clearAuthSession, readAuthSession } from "../utils/authStorage";
+import {
+  clearAuthSession,
+  readAuthSession,
+  writeAuthSession,
+} from "../utils/authStorage";
 import AuthContext from "./auth-context";
 
 const AUTH_STORAGE_KEY = "ls-ecommerce-auth-user";
@@ -36,23 +40,33 @@ function readStoredUser() {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(readStoredUser);
 
-  const login = useCallback(async (credentials) => {
-    const nextUser = await loginWithCredentials(credentials);
-
+  const persistUser = useCallback((nextUser) => {
     setUser(nextUser);
     window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextUser));
 
+    const currentSession = readAuthSession();
+
+    if (currentSession?.accessToken) {
+      writeAuthSession({
+        ...currentSession,
+        user: nextUser,
+      });
+    }
+
     return nextUser;
   }, []);
+
+  const login = useCallback(async (credentials) => {
+    const nextUser = await loginWithCredentials(credentials);
+
+    return persistUser(nextUser);
+  }, [persistUser]);
 
   const register = useCallback(async (payload) => {
     const nextUser = await registerUser(payload);
 
-    setUser(nextUser);
-    window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextUser));
-
-    return nextUser;
-  }, []);
+    return persistUser(nextUser);
+  }, [persistUser]);
 
   const updateRole = useCallback(
     async (role) => {
@@ -60,13 +74,18 @@ export function AuthProvider({ children }) {
         throw new Error("Bạn cần đăng nhập trước khi cập nhật vai trò.");
       }
 
-      const nextUser = await updateUserRole(user.email, role);
-      setUser(nextUser);
-      window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextUser));
+      const normalizedRole = String(role ?? "")
+        .trim()
+        .toLowerCase();
 
-      return nextUser;
+      if (!normalizedRole) {
+        throw new Error("Vai trò không hợp lệ.");
+      }
+
+      const nextUser = await updateUserRole(user.email, normalizedRole);
+      return persistUser(nextUser);
     },
-    [user],
+    [persistUser, user],
   );
 
   const updateProfile = useCallback(
@@ -76,12 +95,9 @@ export function AuthProvider({ children }) {
       }
 
       const nextUser = await updateUserProfile(user.email, updates);
-      setUser(nextUser);
-      window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextUser));
-
-      return nextUser;
+      return persistUser(nextUser);
     },
-    [user],
+    [persistUser, user],
   );
 
   const logout = useCallback(() => {

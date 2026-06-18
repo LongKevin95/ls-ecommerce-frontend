@@ -1,6 +1,7 @@
 import {
   loginWithCredentials as loginWithCredentialsService,
   registerUser as registerUserService,
+  updateUserRole as updateUserRoleService,
   updateUserProfile as updateUserProfileService,
 } from "../services/authService";
 import { normalizeUser as normalizeUserAdapter } from "../adapters/userAdapter";
@@ -80,9 +81,8 @@ export async function updateUserRole(email, role) {
     return normalizeUser(currentUser);
   }
 
-  throw new Error(
-    "Backend hiện chưa hỗ trợ đổi role trực tiếp từ frontend này.",
-  );
+  const session = await updateUserRoleService(normalizedRole);
+  return syncAuthSession(session?.accessToken, session?.user);
 }
 
 export async function updateUserProfile(email, updates = {}) {

@@ -3,6 +3,11 @@ import { getUsers as getUsersService } from "../services/userService";
 import { readAuthSession } from "../utils/authStorage";
 import { getShops } from "./shopsApi";
 
+export const USERS_QUERY_SCOPE = {
+  ADMIN: "admin",
+  PUBLIC: "public",
+};
+
 function normalizeEmail(value) {
   return String(value ?? "")
     .trim()
@@ -37,13 +42,20 @@ function normalizePublicUserFromShop(shop) {
   };
 }
 
-export const getUsers = async () => {
+export const getUsers = async (scope = USERS_QUERY_SCOPE.PUBLIC) => {
   const currentSession = readAuthSession();
   const currentRoles = Array.isArray(currentSession?.user?.roles)
     ? currentSession.user.roles
     : [];
+  const normalizedScope = String(scope ?? USERS_QUERY_SCOPE.PUBLIC)
+    .trim()
+    .toLowerCase();
 
-  if (!currentSession?.accessToken || !currentRoles.includes("admin")) {
+  if (
+    normalizedScope !== USERS_QUERY_SCOPE.ADMIN ||
+    !currentSession?.accessToken ||
+    !currentRoles.includes("admin")
+  ) {
     const shops = await getShops().catch(() => []);
     return shops.map(normalizePublicUserFromShop);
   }

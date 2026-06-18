@@ -28,6 +28,14 @@ export async function registerUser({ name, email, password }) {
   return normalizeAuthResponse(extractApiPayload(response));
 }
 
+export async function updateUserRole(role) {
+  const response = await apiClient.patch("/users/me/role", {
+    role,
+  });
+
+  return normalizeAuthResponse(extractApiPayload(response));
+}
+
 export async function updateUserProfile(_userId, updates = {}) {
   const payload =
     typeof FormData !== "undefined" && updates instanceof FormData

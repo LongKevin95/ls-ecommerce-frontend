@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { USERS_QUERY_SCOPE } from "../../api/usersApi";
 import { useAdminProductsQuery } from "../../hooks/useAdminProductsQuery";
 import { useOrdersQuery } from "../../hooks/useOrdersQuery";
 import { useUsersQuery } from "../../hooks/useUsersQuery";
@@ -25,7 +26,9 @@ function createEmptyVendorStats(vendorEmail, vendorName = "Vendor") {
 }
 
 export default function Dashboard() {
-  const { data: users = [] } = useUsersQuery();
+  const { data: users = [] } = useUsersQuery({
+    scope: USERS_QUERY_SCOPE.ADMIN,
+  });
   const { data: products = [] } = useAdminProductsQuery();
   const { data: orders = [] } = useOrdersQuery();
   const [selectedVendorEmail, setSelectedVendorEmail] = useState("");

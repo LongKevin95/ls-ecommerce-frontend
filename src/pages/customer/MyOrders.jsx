@@ -47,6 +47,15 @@ const ORDER_STATUS_LABELS = {
   cancelled: "Cancelled",
 };
 
+const PAYMENT_STATUS_LABELS = {
+  unpaid: "Chưa thanh toán",
+  pending: "Chờ thanh toán",
+  paid: "Đã thanh toán",
+  failed: "Thanh toán thất bại",
+  expired: "Thanh toán hết hạn",
+  cancelled: "Thanh toán đã hủy",
+};
+
 function normalizeOrderStatus(value) {
   const rawStatus = String(value ?? "pending")
     .trim()
@@ -87,6 +96,14 @@ function getOrderTabKey(status) {
 
 function getOrderStatusLabel(status) {
   return ORDER_STATUS_LABELS[normalizeOrderStatus(status)] ?? "Pending";
+}
+
+function getPaymentStatusLabel(status) {
+  const normalizedStatus = String(status ?? "unpaid")
+    .trim()
+    .toLowerCase();
+
+  return PAYMENT_STATUS_LABELS[normalizedStatus] ?? PAYMENT_STATUS_LABELS.unpaid;
 }
 
 function buildShopList(orderItems, vendorMapByEmail) {
@@ -295,6 +312,7 @@ export default function MyOrders() {
         paymentStatus: String(order?.paymentStatus ?? "unpaid")
           .trim()
           .toLowerCase(),
+        paymentStatusLabel: getPaymentStatusLabel(order?.paymentStatus),
         statusGroup,
         orderItems,
         reviewableItems,
@@ -718,6 +736,15 @@ export default function MyOrders() {
                       </span>
                     </header>
 
+                    {order.paymentMethod === "sepay" ? (
+                      <div className="my-orders-card__note">
+                        <p>
+                          Trạng thái thanh toán: <strong>{order.paymentStatusLabel}</strong>
+                          {order.paidAt ? ` · ${formatDate(order.paidAt)}` : ""}
+                        </p>
+                      </div>
+                    ) : null}
+
                     <div className="my-orders-card__items">
                       {order.visibleItems.map((item, itemIndex) => {
                         const itemQuantity = Number(item?.quantity ?? 0);
@@ -788,6 +815,12 @@ export default function MyOrders() {
                           <p>
                             Đơn hàng đã hoàn tất. Bạn có thể xem lại bất cứ lúc
                             nào.
+                          </p>
+                        ) : order.paymentMethod === "sepay" &&
+                          order.paymentStatus === "paid" ? (
+                          <p>
+                            Đơn hàng đã được thanh toán thành công qua SePay và đang
+                            chờ shop xác nhận xử lý.
                           </p>
                         ) : order.status === "pending" ? (
                           <p>
