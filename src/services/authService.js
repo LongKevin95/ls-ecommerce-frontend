@@ -28,9 +28,10 @@ export async function registerUser({ name, email, password }) {
   return normalizeAuthResponse(extractApiPayload(response));
 }
 
-export async function updateUserRole(role) {
+export async function updateUserRole(role, options = {}) {
   const response = await apiClient.patch("/users/me/role", {
     role,
+    ...(options?.shop ? { shop: options.shop } : {}),
   });
 
   return normalizeAuthResponse(extractApiPayload(response));

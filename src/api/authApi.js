@@ -63,7 +63,7 @@ export async function loginWithCredentials({ email, password }) {
   return syncAuthSession(session?.accessToken, session?.user);
 }
 
-export async function updateUserRole(email, role) {
+export async function updateUserRole(email, role, options = {}) {
   const normalizedEmail = String(email ?? "")
     .trim()
     .toLowerCase();
@@ -73,15 +73,14 @@ export async function updateUserRole(email, role) {
   const currentUser = readAuthSession()?.user;
 
   if (
-    currentUser?.email &&
-    currentUser.email === normalizedEmail &&
-    Array.isArray(currentUser.roles) &&
-    currentUser.roles.includes(normalizedRole)
+    !normalizedEmail ||
+    !currentUser?.email ||
+    currentUser.email !== normalizedEmail
   ) {
-    return normalizeUser(currentUser);
+    throw new Error("Thiếu email tài khoản để cập nhật vai trò.");
   }
 
-  const session = await updateUserRoleService(normalizedRole);
+  const session = await updateUserRoleService(normalizedRole, options);
   return syncAuthSession(session?.accessToken, session?.user);
 }
 

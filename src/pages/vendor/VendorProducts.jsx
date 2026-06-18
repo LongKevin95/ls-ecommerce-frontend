@@ -1865,6 +1865,14 @@ export default function VendorProducts() {
       .toLowerCase();
 
     if (
+      action === "delete" &&
+      productStatus !== PRODUCT_STATUS.DRAFT
+    ) {
+      setErrorMessage("Chỉ có thể xóa sản phẩm ở trạng thái draft.");
+      return;
+    }
+
+    if (
       ["hide", "show"].includes(action) &&
       productStatus === PRODUCT_STATUS.REJECTED
     ) {
@@ -2713,6 +2721,10 @@ export default function VendorProducts() {
                 String(product?.status ?? "")
                   .trim()
                   .toLowerCase() === PRODUCT_STATUS.INACTIVE;
+              const isDraft =
+                String(product?.status ?? "")
+                  .trim()
+                  .toLowerCase() === PRODUCT_STATUS.DRAFT;
 
               return (
                 <div className="vendor-products-table__row" key={product.id}>
@@ -2785,10 +2797,18 @@ export default function VendorProducts() {
                       <button
                         type="button"
                         className="vendor-action-btn vendor-action-btn--icon vendor-action-btn--delete"
-                        disabled={isSaving}
+                        disabled={isSaving || !isDraft}
                         onClick={() => handleAction(product, "delete")}
-                        title="Delete"
-                        aria-label="Delete product"
+                        title={
+                          isDraft
+                            ? "Delete"
+                            : "Chỉ có thể xóa sản phẩm ở trạng thái draft"
+                        }
+                        aria-label={
+                          isDraft
+                            ? "Delete product"
+                            : "Delete disabled for non-draft product"
+                        }
                       >
                         <XIcon />
                       </button>

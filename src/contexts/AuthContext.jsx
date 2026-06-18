@@ -69,7 +69,7 @@ export function AuthProvider({ children }) {
   }, [persistUser]);
 
   const updateRole = useCallback(
-    async (role) => {
+    async (role, options = {}) => {
       if (!user?.email) {
         throw new Error("Bạn cần đăng nhập trước khi cập nhật vai trò.");
       }
@@ -82,7 +82,7 @@ export function AuthProvider({ children }) {
         throw new Error("Vai trò không hợp lệ.");
       }
 
-      const nextUser = await updateUserRole(user.email, normalizedRole);
+      const nextUser = await updateUserRole(user.email, normalizedRole, options);
       return persistUser(nextUser);
     },
     [persistUser, user],

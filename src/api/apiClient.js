@@ -1,11 +1,31 @@
 import axios from "axios";
 import { readAuthSession } from "../utils/authStorage";
 
+const LOCAL_API_BASE_URL = "http://127.0.0.1:8080";
+const REMOTE_API_BASE_URL =
+  "https://l-s-ecommerce-luongdieulong-thaiduongson.onrender.com";
+
+function isLocalRuntime() {
+  if (import.meta.env.DEV) {
+    return true;
+  }
+
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const hostname = String(window.location?.hostname ?? "")
+    .trim()
+    .toLowerCase();
+
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
 function resolveApiBaseUrl(rawBaseUrl) {
   const normalizedBaseUrl = String(rawBaseUrl ?? "").trim();
 
   if (!normalizedBaseUrl) {
-    return "https://l-s-ecommerce-luongdieulong-thaiduongson.onrender.com";
+    return isLocalRuntime() ? LOCAL_API_BASE_URL : REMOTE_API_BASE_URL;
   }
 
   const trimmedBaseUrl = normalizedBaseUrl.replace(/\/+$/, "");

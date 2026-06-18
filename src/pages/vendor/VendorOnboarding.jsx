@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../hooks/useAuth";
@@ -35,6 +36,7 @@ const emptyTaxInfo = {
 
 export default function VendorOnboarding() {
   const { user, updateRole } = useAuth();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [showAddressModal, setShowAddressModal] = useState(false);
@@ -166,7 +168,15 @@ export default function VendorOnboarding() {
 
   const handleEnterVendorCenter = async () => {
     try {
-      await updateRole("vendor");
+      await updateRole("vendor", {
+        shop: {
+          name: shopInfo.name,
+          contactEmail: shopInfo.email,
+          phone: shopInfo.phone,
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+      await queryClient.invalidateQueries({ queryKey: ["shops"] });
       navigate("/vendor");
     } catch (error) {
       window.alert(
