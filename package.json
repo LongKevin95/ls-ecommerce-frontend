@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://LongKevin95.github.io/Final-Project---Luong-Dieu-Long--Thai-Duong-Son---PNL-CIJS110---Nhom-1",
+  "homepage": "",
   "scripts": {
     "dev": "node ./node_modules/vite/bin/vite.js",
     "build": "node ./node_modules/vite/bin/vite.js build",

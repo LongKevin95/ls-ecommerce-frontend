@@ -1,4 +1,34 @@
+function normalizePaymentMethod(value) {
+  const nextValue = String(value ?? "cod")
+    .trim()
+    .toLowerCase();
+
+  if (nextValue === "cash") {
+    return "cod";
+  }
+
+  if (nextValue === "card") {
+    return "sepay";
+  }
+
+  return nextValue || "cod";
+}
+
+function normalizePaymentStatus(value, paymentMethod) {
+  const nextValue = String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (nextValue) {
+    return nextValue;
+  }
+
+  return paymentMethod === "sepay" ? "pending" : "unpaid";
+}
+
 export function normalizeOrder(order) {
+  const paymentMethod = normalizePaymentMethod(order?.paymentMethod);
+
   return {
     id: String(order?.id ?? ""),
     customerId: String(order?.customerId ?? ""),
@@ -13,9 +43,36 @@ export function normalizeOrder(order) {
     status: String(order?.status ?? "pending")
       .trim()
       .toLowerCase(),
-    paymentMethod: String(order?.paymentMethod ?? "cod")
+    paymentMethod,
+    paymentProvider: String(order?.paymentProvider ?? "manual")
       .trim()
       .toLowerCase(),
+    paymentStatus: normalizePaymentStatus(order?.paymentStatus, paymentMethod),
+    paymentCode: String(order?.paymentCode ?? "").trim(),
+    paymentInvoiceNumber: String(order?.paymentInvoiceNumber ?? "").trim(),
+    paymentExpiresAt: order?.paymentExpiresAt ?? null,
+    paidAt: order?.paidAt ?? null,
+    paymentMeta:
+      order?.paymentMeta && typeof order.paymentMeta === "object"
+        ? {
+            sepayOrderId: String(order.paymentMeta?.sepayOrderId ?? "").trim(),
+            sepayTransactionId: String(
+              order.paymentMeta?.sepayTransactionId ?? "",
+            ).trim(),
+            providerTransactionId: String(
+              order.paymentMeta?.providerTransactionId ?? "",
+            ).trim(),
+            providerStatus: String(order.paymentMeta?.providerStatus ?? "").trim(),
+            gateway: String(order.paymentMeta?.gateway ?? "").trim(),
+            referenceCode: String(order.paymentMeta?.referenceCode ?? "").trim(),
+            paymentChannel: String(order.paymentMeta?.paymentChannel ?? "").trim(),
+            cardBrand: String(order.paymentMeta?.cardBrand ?? "").trim(),
+            cardNumberMasked: String(
+              order.paymentMeta?.cardNumberMasked ?? "",
+            ).trim(),
+            lastWebhookAt: order.paymentMeta?.lastWebhookAt ?? null,
+          }
+        : null,
     shippingAddress: {
       fullName: String(order?.shippingAddress?.fullName ?? "").trim(),
       phone: String(order?.shippingAddress?.phone ?? "").trim(),

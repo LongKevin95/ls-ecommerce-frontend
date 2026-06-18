@@ -8,5 +8,15 @@ export const ORDER_STATUS = {
 
 export const PAYMENT_METHODS = {
   COD: "cod",
+  SEPAY: "sepay",
   CARD: "card",
+};
+
+export const PAYMENT_STATUS = {
+  UNPAID: "unpaid",
+  PENDING: "pending",
+  PAID: "paid",
+  FAILED: "failed",
+  EXPIRED: "expired",
+  CANCELLED: "cancelled",
 };

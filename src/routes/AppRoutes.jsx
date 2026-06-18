@@ -6,6 +6,7 @@ import ShopStore from "../pages/customer/ShopStore";
 import ProductDetail from "../pages/customer/ProductDetail";
 import Cart from "../pages/customer/Cart";
 import Checkout from "../pages/customer/Checkout";
+import PaymentResult from "../pages/customer/PaymentResult";
 import Wishlist from "../pages/customer/Wishlist";
 import MyOrders from "../pages/customer/MyOrders";
 import ProfileSettings from "../pages/account/ProfileSettings";
@@ -50,6 +51,15 @@ export default function AppRoutes() {
         element={
           <PrivateRoute>
             <MyOrders />
+          </PrivateRoute>
+        }
+      />
+
+      <Route
+        path="/payment/result"
+        element={
+          <PrivateRoute>
+            <PaymentResult />
           </PrivateRoute>
         }
       />

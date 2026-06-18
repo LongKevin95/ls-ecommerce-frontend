@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../hooks/useAuth";
 import { useCart } from "../../hooks/useCart";
 import { createOrder } from "../../api/ordersApi";
+import { initSePayCheckout } from "../../api/paymentsApi";
 import "./Checkout.css";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -25,8 +26,38 @@ const initialFormData = {
   zipCode: "",
   phone: "",
   email: "",
-  paymentMethod: "cash",
+  paymentMethod: "cod",
 };
+
+function submitHostedPaymentForm(checkoutForm) {
+  const actionUrl = String(checkoutForm?.actionUrl ?? "").trim();
+  const method = String(checkoutForm?.method ?? "POST").trim().toUpperCase() || "POST";
+  const fields =
+    checkoutForm?.fields && typeof checkoutForm.fields === "object"
+      ? checkoutForm.fields
+      : {};
+
+  if (!actionUrl) {
+    throw new Error("Không thể chuyển hướng tới cổng thanh toán SePay.");
+  }
+
+  const form = document.createElement("form");
+  form.method = method;
+  form.action = actionUrl;
+  form.style.display = "none";
+
+  Object.entries(fields).forEach(([key, value]) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = key;
+    input.value = String(value ?? "");
+    form.appendChild(input);
+  });
+
+  document.body.appendChild(form);
+  form.submit();
+  form.remove();
+}
 
 function Checkout() {
   const { user, isCustomer } = useAuth();
@@ -150,7 +181,7 @@ function Checkout() {
     setIsSubmitting(true);
 
     try {
-      await createOrder({
+      const createdOrder = await createOrder({
         customerEmail: normalizedCustomerEmail,
         customerName:
           shippingAddress.fullName || user?.name || user?.email || "Customer",
@@ -171,6 +202,24 @@ function Checkout() {
         queryClient.invalidateQueries({ queryKey: ["products", "admin"] }),
         queryClient.invalidateQueries({ queryKey: ["products", "public"] }),
       ]);
+
+      if (createdOrder?.paymentMethod === "sepay") {
+        try {
+          const paymentSession = await initSePayCheckout(createdOrder.id);
+          submitHostedPaymentForm(paymentSession?.checkoutForm);
+          return;
+        } catch (paymentError) {
+          console.error("Lỗi khi khởi tạo SePay:", paymentError);
+          window.alert(
+            paymentError?.message ??
+              "Đơn hàng đã được tạo nhưng chưa khởi tạo được phiên thanh toán SePay.",
+          );
+          navigate(
+            `/payment/result?result=error&provider=sepay&orderId=${encodeURIComponent(createdOrder.id)}`,
+          );
+          return;
+        }
+      }
     } catch (error) {
       console.error("Lỗi khi checkout:", error);
       window.alert(
@@ -299,8 +348,8 @@ function Checkout() {
                 <input
                   type="radio"
                   name="paymentMethod"
-                  value="cash"
-                  checked={formData.paymentMethod === "cash"}
+                  value="cod"
+                  checked={formData.paymentMethod === "cod"}
                   onChange={handleChange}
                 />
                 <span>Cash on Delivery (COD)</span>
@@ -310,17 +359,17 @@ function Checkout() {
                 <input
                   type="radio"
                   name="paymentMethod"
-                  value="card"
-                  checked={formData.paymentMethod === "card"}
+                  value="sepay"
+                  checked={formData.paymentMethod === "sepay"}
                   onChange={handleChange}
                 />
-                <span>Card Payment</span>
+                <span>Thanh toán online qua SePay</span>
               </label>
             </div>
 
             <p className="checkout-payment-note">
-              Ban chi can chon phuong thuc thanh toan, khong can nhap thong tin
-              the.
+              Với SePay, bạn sẽ được chuyển sang cổng thanh toán để chọn QR hoặc
+              nhập thông tin thẻ an toàn.
             </p>
 
             <button

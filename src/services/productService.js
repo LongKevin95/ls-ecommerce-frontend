@@ -35,8 +35,16 @@ export async function getProductById(productId) {
     return null;
   }
 
-  const response = await apiClient.get(`/products/${normalizedProductId}`);
-  return extractApiPayload(response);
+  try {
+    const response = await apiClient.get(`/products/${normalizedProductId}`);
+    return extractApiPayload(response);
+  } catch (error) {
+    if (Number(error?.status ?? 0) === 404) {
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 export async function getAdminProducts() {

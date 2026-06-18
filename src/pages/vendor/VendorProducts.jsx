@@ -54,12 +54,12 @@ const categoryOptions = [
   },
   {
     value: "do-gia-dung",
-    label: "Home",
+    label: "Furniture",
     flags: {
       useSizes: false,
       useColors: false,
       useBrand: true,
-      useMaterial: true,
+      useMaterial: false,
     },
   },
   {
@@ -100,7 +100,8 @@ const categoryVariantFields = {
   ],
   "do-gia-dung": [
     { key: "color", label: "Color" },
-    { key: "size", label: "Size" },
+    { key: "sizeValues", label: "Size" },
+    { key: "material", label: "Material" },
   ],
   "dien-tu": [
     { key: "storage", label: "Storage" },
@@ -108,6 +109,19 @@ const categoryVariantFields = {
   ],
   "thuc-pham": [{ key: "packSize", label: "Pack size" }],
   others: [{ key: "optionName", label: "Option" }],
+};
+
+const categoryVariantAttributeFields = {
+  "do-gia-dung": [],
+};
+
+const CATEGORY_SKU_PREFIX = {
+  "fashion-nam": "MEN",
+  "fashion-nu": "WMN",
+  "do-gia-dung": "FUR",
+  "dien-tu": "ELE",
+  "thuc-pham": "FOD",
+  others: "GEN",
 };
 
 function createLocalVariantId() {
@@ -125,6 +139,56 @@ function normalizeVariantOptionValues(categoryValue, optionValues = {}) {
   }, {});
 }
 
+function normalizeVariantAttributeFields(categoryValue) {
+  return categoryVariantAttributeFields[categoryValue] ?? [];
+}
+
+function hasColorVariantField(categoryValue) {
+  return normalizeVariantFields(categoryValue).some((field) => field.key === "color");
+}
+
+function normalizeHexColorValue(value) {
+  return String(value ?? "").trim();
+}
+
+function isValidHexColorValue(value) {
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalizeHexColorValue(value));
+}
+
+function normalizeVariantAttributeValues(categoryValue, attributes = {}) {
+  const normalizedAttributes = normalizeVariantAttributeFields(categoryValue).reduce(
+    (result, field) => {
+      result[field.key] = String(attributes?.[field.key] ?? "");
+      return result;
+    },
+    {},
+  );
+
+  if (hasColorVariantField(categoryValue)) {
+    normalizedAttributes.colorHex = normalizeHexColorValue(attributes?.colorHex);
+  }
+
+  return normalizedAttributes;
+}
+
+function createVariantGeneratorInputs(categoryValue, overrides = {}) {
+  const optionInputs = normalizeVariantFields(categoryValue).reduce(
+    (result, field) => {
+      result[field.key] = String(overrides?.[field.key] ?? "");
+      return result;
+    },
+    {},
+  );
+  const attributeInputs = normalizeVariantAttributeFields(categoryValue).reduce(
+    (result, field) => {
+      result[field.key] = String(overrides?.[field.key] ?? "");
+      return result;
+    },
+    {},
+  );
+  return { ...optionInputs, ...attributeInputs };
+}
+
 function createVariantDraft(categoryValue, overrides = {}) {
   return {
     localId: String(overrides.localId ?? createLocalVariantId()),
@@ -134,11 +198,166 @@ function createVariantDraft(categoryValue, overrides = {}) {
     oldPrice: String(overrides.oldPrice ?? ""),
     stock: String(overrides.stock ?? ""),
     image: String(overrides.image ?? ""),
+    isDefault: Boolean(overrides.isDefault),
     optionValues: normalizeVariantOptionValues(
       categoryValue,
       overrides.optionValues,
     ),
+    attributes: normalizeVariantAttributeValues(
+      categoryValue,
+      overrides.attributes,
+    ),
   };
+}
+
+function buildVariantSignature(categoryValue, optionValues = {}, attributes = {}) {
+  const optionParts = normalizeVariantFields(categoryValue).map((field) =>
+    String(optionValues?.[field.key] ?? "").trim().toLowerCase(),
+  );
+  const attributeParts = normalizeVariantAttributeFields(categoryValue).map(
+    (field) => String(attributes?.[field.key] ?? "").trim().toLowerCase(),
+  );
+  return [...optionParts, ...attributeParts].join("||");
+}
+
+function buildVariantLabel(categoryValue, variant) {
+  const optionParts = normalizeVariantFields(categoryValue)
+    .map((field) => String(variant?.optionValues?.[field.key] ?? "").trim())
+    .filter(Boolean);
+  const attributeParts = normalizeVariantAttributeFields(categoryValue)
+    .map((field) => String(variant?.attributes?.[field.key] ?? "").trim())
+    .filter(Boolean);
+  const combined = [...optionParts, ...attributeParts].join(" / ");
+
+  if (combined) {
+    return combined;
+  }
+  return (
+    String(variant?.title ?? "").trim() ||
+    String(variant?.sku ?? "").trim() ||
+    "Default variant"
+  );
+}
+
+function normalizeSkuText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, (character) => (character === "đ" ? "d" : "D"));
+}
+
+function createSkuSegment(value, maxLength = 6) {
+  return normalizeSkuText(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .join("")
+    .slice(0, maxLength);
+}
+
+function getCategorySkuPrefix(categoryValue) {
+  return CATEGORY_SKU_PREFIX[categoryValue] ?? CATEGORY_SKU_PREFIX.others;
+}
+
+function buildVariantSkuSegments(categoryValue, variant) {
+  const optionSegments = normalizeVariantFields(categoryValue)
+    .map((field) => createSkuSegment(variant?.optionValues?.[field.key], 6))
+    .filter(Boolean);
+
+  return optionSegments.length > 0 ? optionSegments : ["DEFAULT"];
+}
+
+function buildAutoVariantSku(categoryValue, productTitle, variant, variantIndex = 0) {
+  const categoryPrefix = getCategorySkuPrefix(categoryValue);
+  const productSegment = createSkuSegment(productTitle, 6) || "ITEM";
+  const optionSegments = buildVariantSkuSegments(categoryValue, variant);
+  const sequence = String(Math.max(0, Number(variantIndex) || 0) + 1).padStart(
+    2,
+    "0",
+  );
+
+  return [categoryPrefix, productSegment, ...optionSegments, sequence].join("-");
+}
+
+function resolveVariantSku(categoryValue, productTitle, variant, variantIndex = 0) {
+  const existingSku = String(variant?.sku ?? "").trim();
+
+  if (existingSku) {
+    return existingSku;
+  }
+
+  return buildAutoVariantSku(categoryValue, productTitle, variant, variantIndex);
+}
+
+function ensureSingleDefaultVariant(variants = [], preferredLocalId = "") {
+  const nextVariants = Array.isArray(variants) ? variants.filter(Boolean) : [];
+
+  if (nextVariants.length === 0) {
+    return [];
+  }
+
+  const normalizedPreferredLocalId = String(preferredLocalId ?? "").trim();
+  const existingDefaultLocalId = String(
+    nextVariants.find((variant) => variant?.isDefault)?.localId ?? "",
+  ).trim();
+  const resolvedDefaultLocalId =
+    (normalizedPreferredLocalId &&
+      nextVariants.some(
+        (variant) => String(variant?.localId ?? "").trim() === normalizedPreferredLocalId,
+      ) &&
+      normalizedPreferredLocalId) ||
+    existingDefaultLocalId ||
+    String(nextVariants[0]?.localId ?? "").trim();
+
+  return nextVariants.map((variant, index) => ({
+    ...variant,
+    isDefault:
+      String(variant?.localId ?? "").trim() === resolvedDefaultLocalId ||
+      (!resolvedDefaultLocalId && index === 0),
+  }));
+}
+
+function buildGeneratorInputsFromVariants(categoryValue, variants = []) {
+  const optionInputs = normalizeVariantFields(categoryValue).reduce(
+    (result, field) => {
+      result[field.key] = [
+        ...new Set(
+          (Array.isArray(variants) ? variants : [])
+            .map((variant) =>
+              String(variant?.optionValues?.[field.key] ?? "").trim(),
+            )
+            .filter(Boolean),
+        ),
+      ].join(", ");
+      return result;
+    },
+    {},
+  );
+  const attributeInputs = normalizeVariantAttributeFields(categoryValue).reduce(
+    (result, field) => {
+      result[field.key] = [
+        ...new Set(
+          (Array.isArray(variants) ? variants : [])
+            .map((variant) => String(variant?.attributes?.[field.key] ?? "").trim())
+            .filter(Boolean),
+        ),
+      ].join(", ");
+      return result;
+    },
+    {},
+  );
+  return { ...optionInputs, ...attributeInputs };
+}
+
+function formatVariantCurrency(value) {
+  const amount = Number(value ?? 0);
+
+  if (!Number.isFinite(amount)) {
+    return "$0";
+  }
+
+  return `$${amount.toLocaleString("en-US")}`;
 }
 
 function hasMeaningfulVariantDraft(variant) {
@@ -154,6 +373,9 @@ function hasMeaningfulVariantDraft(variant) {
     String(variant.stock ?? "").trim() ||
     String(variant.image ?? "").trim() ||
     Object.values(variant.optionValues ?? {}).some((value) =>
+      String(value ?? "").trim(),
+    ) ||
+    Object.values(variant.attributes ?? {}).some((value) =>
       String(value ?? "").trim(),
     )
   );
@@ -187,6 +409,14 @@ function parseImageUrls(text) {
   return [
     ...new Set(parseInputList(text).map(normalizeImageSource).filter(Boolean)),
   ];
+}
+
+function removeImageUrlFromTextList(text, imageUrl) {
+  const normalizedTargetImage = normalizeImageSource(imageUrl);
+
+  return parseImageUrls(text)
+    .filter((image) => normalizeImageSource(image) !== normalizedTargetImage)
+    .join("\n");
 }
 
 function getProductThumbnail(product) {
@@ -401,9 +631,14 @@ export default function VendorProducts() {
   const [existingGalleryImages, setExistingGalleryImages] = useState([]);
   const [selectedThumbnailFile, setSelectedThumbnailFile] = useState(null);
   const [selectedGalleryFiles, setSelectedGalleryFiles] = useState([]);
-  const [variantRows, setVariantRows] = useState(() => [
+  const [variantRows, setVariantRows] = useState([]);
+  const [variantDraft, setVariantDraft] = useState(() =>
     createVariantDraft(defaultForm.category),
-  ]);
+  );
+  const [variantGeneratorInputs, setVariantGeneratorInputs] = useState(() =>
+    createVariantGeneratorInputs(defaultForm.category),
+  );
+  const [editingVariantLocalId, setEditingVariantLocalId] = useState("");
   const [imagePendingRemoval, setImagePendingRemoval] = useState(null);
   const [editingId, setEditingId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -441,6 +676,24 @@ export default function VendorProducts() {
   }, [vendorProducts, currentPage, itemsPerPage]);
 
   const totalPages = Math.ceil(vendorProducts.length / itemsPerPage);
+
+  const editingProduct = useMemo(() => {
+    if (!editingId) {
+      return null;
+    }
+
+    return (
+      vendorProducts.find((p) => String(p?.id ?? "") === String(editingId)) ??
+      null
+    );
+  }, [vendorProducts, editingId]);
+
+  const editingProductStatusKey = useMemo(() => {
+    return String(editingProduct?.status ?? "").trim().toLowerCase();
+  }, [editingProduct]);
+
+  const canUpdateLive = Boolean(editingId) &&
+    editingProductStatusKey === PRODUCT_STATUS.ACTIVE;
 
   function syncProductCaches(nextProduct) {
     const normalizedId = String(nextProduct?.id ?? "").trim();
@@ -495,36 +748,77 @@ export default function VendorProducts() {
     () => normalizeVariantFields(form.category),
     [form.category],
   );
+  const selectedVariantAttributeFields = useMemo(
+    () => normalizeVariantAttributeFields(form.category),
+    [form.category],
+  );
+  const defaultVariantLocalId = useMemo(
+    () =>
+      String(variantRows.find((variant) => variant?.isDefault)?.localId ?? "").trim(),
+    [variantRows],
+  );
+
+  const [duplicateLocalIds, setDuplicateLocalIds] = useState(new Set());
+
+  useEffect(() => {
+    const map = {};
+    const dup = new Set();
+    (Array.isArray(variantRows) ? variantRows : []).forEach((v) => {
+      const sig = buildVariantSignature(
+        form.category,
+        v.optionValues,
+        v.attributes,
+      );
+      if (!sig) {
+        return;
+      }
+      if (!map[sig]) {
+        map[sig] = [];
+      }
+      map[sig].push(String(v.localId));
+    });
+
+    Object.values(map).forEach((ids) => {
+      if (ids.length > 1) {
+        ids.forEach((id) => dup.add(id));
+      }
+    });
+
+    setDuplicateLocalIds(dup);
+  }, [variantRows, form.category]);
 
   const editProductIdFromQuery = useMemo(() => {
     const params = new URLSearchParams(location.search);
     return String(params.get("edit") ?? "").trim();
   }, [location.search]);
 
-  function startEditingProduct(product) {
+  function applyEditingProduct(product) {
     const productThumbnail = getProductThumbnail(product);
     const productGalleryImages = getProductGalleryImages(product);
     const nextVariantRows =
       Array.isArray(product?.variants) && product.variants.length > 0
-        ? product.variants.map((variant) =>
-            createVariantDraft(product.category, {
-              localId: variant.id,
-              sku: variant.sku,
-              title: variant.title,
-              price: variant.price,
-              oldPrice: variant.oldPrice,
-              stock: variant.stock,
-              image: variant.image,
-              optionValues: variant.optionValues,
-            }),
+        ? ensureSingleDefaultVariant(
+            product.variants.map((variant) =>
+              createVariantDraft(product.category, {
+                localId: variant.id,
+                sku: variant.sku,
+                title: variant.title,
+                price: variant.price,
+                oldPrice: variant.oldPrice,
+                stock: variant.stock,
+                image: variant.image,
+                isDefault: variant.isDefault,
+                optionValues: variant.optionValues,
+                attributes: variant.attributes,
+              }),
+            ),
+            String(
+              product.variants.find((variant) => variant?.isDefault)?.id ??
+                product.defaultVariantId ??
+                "",
+            ).trim(),
           )
-        : [
-            createVariantDraft(product.category, {
-              price: product.price,
-              oldPrice: product.oldPrice,
-              stock: product.stock,
-            }),
-          ];
+        : [];
 
     setEditingId(String(product.id));
     setForm({
@@ -555,20 +849,48 @@ export default function VendorProducts() {
     setSelectedThumbnailFile(null);
     setSelectedGalleryFiles([]);
     setVariantRows(nextVariantRows);
+    setVariantDraft(
+      createVariantDraft(product.category, {
+        price: product.price,
+        oldPrice: product.oldPrice,
+        stock: product.stock,
+        image: productThumbnail,
+      }),
+    );
+    setVariantGeneratorInputs(
+      buildGeneratorInputsFromVariants(product.category, nextVariantRows),
+    );
+    setEditingVariantLocalId("");
     setImagePendingRemoval(null);
     setErrorMessage("");
+  }
+
+  async function startEditingProduct(product) {
+    const normalizedProductId = String(product?.id ?? "").trim();
+
+    if (!normalizedProductId) {
+      setErrorMessage("Không tìm thấy sản phẩm để chỉnh sửa.");
+      return;
+    }
+
+    applyEditingProduct(product);
   }
 
   useEffect(() => {
     setVariantRows((previous) => {
       if (!Array.isArray(previous) || previous.length === 0) {
-        return [createVariantDraft(form.category)];
+        return [];
       }
 
-      return previous.map((variant) =>
-        createVariantDraft(form.category, variant),
+      return ensureSingleDefaultVariant(
+        previous.map((variant) => createVariantDraft(form.category, variant)),
       );
     });
+    setVariantDraft((previous) => createVariantDraft(form.category, previous));
+    setVariantGeneratorInputs((previous) =>
+      createVariantGeneratorInputs(form.category, previous),
+    );
+    setEditingVariantLocalId("");
   }, [form.category]);
 
   useEffect(() => {
@@ -584,7 +906,7 @@ export default function VendorProducts() {
       return;
     }
 
-    startEditingProduct(productToEdit);
+    void startEditingProduct(productToEdit);
   }, [editProductIdFromQuery, editingId, vendorProducts]);
 
   useEffect(() => {
@@ -603,6 +925,156 @@ export default function VendorProducts() {
     if (errorMessage) {
       setErrorMessage("");
     }
+  }
+
+  function handleBulkApply(fieldName) {
+    const sourceValue = String(variantDraft?.[fieldName] ?? "");
+
+    setVariantRows((previous) =>
+      previous.map((variant) =>
+        createVariantDraft(form.category, {
+          ...variant,
+          [fieldName]: sourceValue,
+        }),
+      ),
+    );
+
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  }
+
+  function handleInlineVariantOptionChange(localId, optionKey, nextValue) {
+    const updatedRows = (Array.isArray(variantRows) ? variantRows : []).map(
+      (variant) => {
+        if (String(variant.localId) !== String(localId)) {
+          return variant;
+        }
+
+        return createVariantDraft(form.category, {
+          ...variant,
+          optionValues: {
+            ...(variant.optionValues ?? {}),
+            [optionKey]: String(nextValue ?? ""),
+          },
+        });
+      },
+    );
+
+    const signatureCounts = {};
+    updatedRows.forEach((v) => {
+      const sig = buildVariantSignature(
+        form.category,
+        v.optionValues,
+        v.attributes,
+      );
+      if (!sig) {
+        return;
+      }
+      signatureCounts[sig] = (signatureCounts[sig] || 0) + 1;
+    });
+
+    const hasDuplicate = Object.values(signatureCounts).some((c) => c > 1);
+
+    setVariantRows(updatedRows);
+
+    if (hasDuplicate) {
+      setErrorMessage("Biến thể với tổ hợp tùy chọn này đã tồn tại.");
+    } else if (errorMessage) {
+      setErrorMessage("");
+    }
+  }
+
+  function getVariantImageInputId(localId) {
+    return `variant-image-file-${String(localId)}`;
+  }
+
+  const [invalidImageUrlByLocalId, setInvalidImageUrlByLocalId] = useState({});
+
+  async function headCheck(url) {
+    try {
+      const response = await fetch(url, { method: "HEAD" });
+      if (!response.ok) return false;
+      const contentType = response.headers.get("content-type") || "";
+      return contentType.includes("image");
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function imageLoadCheck(url) {
+    return new Promise((resolve) => {
+      try {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = url;
+      } catch (_) {
+        resolve(false);
+      }
+    });
+  }
+
+  async function validateVariantImageUrl(localId, url) {
+    const value = String(url ?? "").trim();
+
+    if (!value) {
+      setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: false }));
+      return;
+    }
+
+    const looksLikeUrl = /^(https?:)?\/\//i.test(value) || value.startsWith("data:");
+
+    if (!looksLikeUrl) {
+      setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: true }));
+      return;
+    }
+
+    if (value.startsWith("data:")) {
+      setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: false }));
+      return;
+    }
+
+    const ok = (await headCheck(value)) || (await imageLoadCheck(value));
+    setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: !ok }));
+  }
+
+  function requestUploadVariantImage(localId) {
+    const input = document.getElementById(getVariantImageInputId(localId));
+    if (input) {
+      input.click();
+    }
+  }
+
+  function handleVariantImageFileSelected(localId, event) {
+    const file = event?.target?.files?.[0] ?? null;
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type?.startsWith("image/")) {
+      setErrorMessage("Vui lòng chọn file ảnh hợp lệ.");
+      return;
+    }
+
+    const maxSizeBytes = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSizeBytes) {
+      setErrorMessage("Ảnh quá lớn (tối đa 5MB).");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      handleInlineVariantChange(localId, "image", dataUrl);
+      setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: false }));
+    };
+    reader.onerror = () => {
+      setErrorMessage("Không thể đọc file ảnh. Vui lòng thử lại.");
+    };
+    reader.readAsDataURL(file);
   }
 
   function handleSelectThumbnailFile(event) {
@@ -642,6 +1114,14 @@ export default function VendorProducts() {
 
   function handleRemoveExistingThumbnail() {
     setExistingThumbnail("");
+    setForm((previous) => ({
+      ...previous,
+      thumbnailUrl:
+        normalizeImageSource(previous.thumbnailUrl) ===
+        normalizeImageSource(existingThumbnail)
+          ? ""
+          : previous.thumbnailUrl,
+    }));
     setImagePendingRemoval(null);
 
     if (errorMessage) {
@@ -703,6 +1183,13 @@ export default function VendorProducts() {
     setExistingGalleryImages((prev) =>
       prev.filter((image) => image !== imageToRemove),
     );
+    setForm((previous) => ({
+      ...previous,
+      galleryUrlsText: removeImageUrlFromTextList(
+        previous.galleryUrlsText,
+        imageToRemove,
+      ),
+    }));
     setImagePendingRemoval(null);
 
     if (errorMessage) {
@@ -733,49 +1220,227 @@ export default function VendorProducts() {
     setExistingGalleryImages([]);
     setSelectedThumbnailFile(null);
     setSelectedGalleryFiles([]);
-    setVariantRows([createVariantDraft(defaultForm.category)]);
+    setVariantRows([]);
+    setVariantDraft(createVariantDraft(defaultForm.category));
+    setVariantGeneratorInputs(createVariantGeneratorInputs(defaultForm.category));
+    setEditingVariantLocalId("");
     setImagePendingRemoval(null);
     setEditingId("");
     setSaveIntent("");
     setErrorMessage("");
   }
 
-  function handleAddVariantRow() {
-    setVariantRows((previous) => [
-      ...previous,
-      createVariantDraft(form.category),
-    ]);
-
-    if (errorMessage) {
-      setErrorMessage("");
-    }
+  function resetVariantDraft() {
+    setVariantDraft(
+      createVariantDraft(form.category, {
+        price: form.price,
+        oldPrice: form.price,
+        stock: "0",
+        image: normalizeImageSource(form.thumbnailUrl) || existingThumbnail,
+      }),
+    );
+    setEditingVariantLocalId("");
   }
 
   function handleRemoveVariantRow(localId) {
     setVariantRows((previous) => {
-      const nextRows = previous.filter(
-        (variant) => variant.localId !== localId,
+      const nextRows = ensureSingleDefaultVariant(
+        previous.filter((variant) => variant.localId !== localId),
       );
-      return nextRows.length > 0
-        ? nextRows
-        : [createVariantDraft(form.category)];
+      return nextRows;
     });
 
+    if (String(editingVariantLocalId) === String(localId)) {
+      resetVariantDraft();
+    }
+
     if (errorMessage) {
       setErrorMessage("");
     }
   }
 
-  function handleVariantFieldChange(localId, fieldName, nextValue) {
-    setVariantRows((previous) =>
-      previous.map((variant) =>
-        variant.localId === localId
-          ? {
-              ...variant,
-              [fieldName]: nextValue,
-            }
-          : variant,
+  function handleVariantFieldChange(fieldName, nextValue) {
+    setVariantDraft((previous) => ({
+      ...previous,
+      [fieldName]: fieldName === "isDefault" ? Boolean(nextValue) : nextValue,
+    }));
+
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  }
+
+  function handleVariantOptionChange(optionKey, nextValue) {
+    setVariantDraft((previous) => ({
+      ...previous,
+      optionValues: {
+        ...(previous.optionValues ?? {}),
+        [optionKey]: nextValue,
+      },
+    }));
+
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  }
+
+  function handleVariantAttributeChange(attrKey, nextValue) {
+    setVariantDraft((previous) => ({
+      ...previous,
+      attributes: {
+        ...(previous.attributes ?? {}),
+        [attrKey]: nextValue,
+      },
+    }));
+
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  }
+
+  function handleVariantGeneratorChange(optionKey, nextValue) {
+    setVariantGeneratorInputs((previous) => ({
+      ...previous,
+      [optionKey]: nextValue,
+    }));
+
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  }
+
+  function handleSaveVariantDraft() {
+    const missingField = selectedVariantFields.find(
+      (field) => !String(variantDraft?.optionValues?.[field.key] ?? "").trim(),
+    );
+
+    if (missingField) {
+      setErrorMessage(`Vui lòng nhập ${missingField.label} cho biến thể.`);
+      return;
+    }
+
+    if (!hasMeaningfulVariantDraft(variantDraft)) {
+      setErrorMessage("Hãy nhập thông tin biến thể trước khi thêm vào danh sách.");
+      return;
+    }
+
+    const nextVariant = createVariantDraft(form.category, {
+      ...variantDraft,
+      localId: editingVariantLocalId || variantDraft.localId,
+    });
+    const nextVariantIndex = editingVariantLocalId
+      ? Math.max(
+          variantRows.findIndex(
+            (variant) => String(variant.localId) === String(editingVariantLocalId),
+          ),
+          0,
+        )
+      : variantRows.length;
+    const nextVariantWithSku = {
+      ...nextVariant,
+      sku: resolveVariantSku(
+        form.category,
+        form.title,
+        nextVariant,
+        nextVariantIndex,
       ),
+    };
+
+    if (
+      hasColorVariantField(form.category) &&
+      nextVariantWithSku.attributes?.colorHex &&
+      !isValidHexColorValue(nextVariantWithSku.attributes.colorHex)
+    ) {
+      setErrorMessage("Color HEX của biến thể không hợp lệ.");
+      return;
+    }
+
+    const nextSignature = buildVariantSignature(
+      form.category,
+      nextVariantWithSku.optionValues,
+      nextVariantWithSku.attributes,
+    );
+
+    if (
+      nextSignature &&
+      variantRows.some(
+        (variant) =>
+          String(variant.localId) !== String(nextVariantWithSku.localId) &&
+          buildVariantSignature(
+            form.category,
+            variant.optionValues,
+            variant.attributes,
+          ) === nextSignature,
+      )
+    ) {
+      setErrorMessage("Biến thể với tổ hợp tùy chọn này đã tồn tại.");
+      return;
+    }
+
+    setVariantRows((previous) => {
+      const nextRows = editingVariantLocalId
+        ? previous.map((variant) =>
+            variant.localId === editingVariantLocalId ? nextVariantWithSku : variant,
+          )
+        : [...previous, nextVariantWithSku];
+
+      return ensureSingleDefaultVariant(
+        nextRows,
+        nextVariantWithSku.isDefault
+          ? nextVariantWithSku.localId
+          : defaultVariantLocalId,
+      );
+    });
+    resetVariantDraft();
+
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  }
+
+  function handleEditVariant(localId) {
+    const targetVariant = variantRows.find(
+      (variant) => String(variant.localId) === String(localId),
+    );
+
+    if (!targetVariant) {
+      return;
+    }
+
+    setVariantDraft(createVariantDraft(form.category, targetVariant));
+    setEditingVariantLocalId(String(localId));
+
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  }
+
+  function handleSetDefaultVariant(localId) {
+    setVariantRows((previous) => ensureSingleDefaultVariant(previous, localId));
+    setVariantDraft((previous) => ({
+      ...previous,
+      isDefault: String(editingVariantLocalId) === String(localId),
+    }));
+
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  }
+
+  function handleInlineVariantChange(localId, fieldName, nextValue) {
+    setVariantRows((previous) =>
+      previous.map((variant) => {
+        if (String(variant.localId) !== String(localId)) {
+          return variant;
+        }
+
+        const draft = createVariantDraft(form.category, {
+          ...variant,
+          [fieldName]: nextValue,
+        });
+
+        return draft;
+      }),
     );
 
     if (errorMessage) {
@@ -783,20 +1448,116 @@ export default function VendorProducts() {
     }
   }
 
-  function handleVariantOptionChange(localId, optionKey, nextValue) {
+  function handleGenerateVariants() {
+    const generatorOptionFieldValues = selectedVariantFields.map((field) => ({
+      ...field,
+      values: [...new Set(parseInputList(variantGeneratorInputs[field.key]))],
+    }));
+    const generatorAttributeFieldValues = selectedVariantAttributeFields.map(
+      (field) => ({
+        ...field,
+        values: [...new Set(parseInputList(variantGeneratorInputs[field.key]))],
+      }),
+    );
+    const missingField =
+      generatorOptionFieldValues.find((field) => field.values.length === 0) ||
+      generatorAttributeFieldValues.find((field) => field.values.length === 0);
+
+    if (missingField) {
+      setErrorMessage(`Vui lòng nhập ít nhất 1 giá trị cho ${missingField.label}.`);
+      return;
+    }
+
+    const optionCombinations = generatorOptionFieldValues.reduce(
+      (result, field) =>
+        result.flatMap((currentCombination) =>
+          field.values.map((value) => ({
+            ...currentCombination,
+            [field.key]: value,
+          })),
+        ),
+      [{}],
+    );
+    const attributeCombinations = generatorAttributeFieldValues.reduce(
+      (result, field) =>
+        result.flatMap((currentCombination) =>
+          field.values.map((value) => ({
+            ...currentCombination,
+            [field.key]: value,
+          })),
+        ),
+      [{}],
+    );
+    const combinations = optionCombinations.flatMap((opt) =>
+      (attributeCombinations.length ? attributeCombinations : [{}]).map((attr) => ({
+        optionValues: opt,
+        attributes: attr,
+      })),
+    );
+    const existingSignatures = new Set(
+      variantRows
+        .map((variant) =>
+          buildVariantSignature(
+            form.category,
+            variant.optionValues,
+            variant.attributes,
+          ),
+        )
+        .filter(Boolean),
+    );
+    const fallbackImage =
+      String(variantDraft.image ?? "").trim() ||
+      normalizeImageSource(form.thumbnailUrl) ||
+      existingThumbnail;
+    const generatedVariants = combinations
+      .map(({ optionValues, attributes }) =>
+        createVariantDraft(form.category, {
+          price: String(variantDraft.price ?? form.price ?? ""),
+          oldPrice: String(
+            variantDraft.oldPrice ?? variantDraft.price ?? form.price ?? "",
+          ),
+          stock: String(variantDraft.stock ?? "0"),
+          image: fallbackImage,
+          optionValues,
+          attributes,
+        }),
+      )
+      .filter((variant) => {
+        const signature = buildVariantSignature(
+          form.category,
+          variant.optionValues,
+          variant.attributes,
+        );
+
+        if (!signature || existingSignatures.has(signature)) {
+          return false;
+        }
+
+        existingSignatures.add(signature);
+        return true;
+      });
+    const generatedVariantsWithSku = generatedVariants.map((variant, index) => ({
+      ...variant,
+      sku: resolveVariantSku(
+        form.category,
+        form.title,
+        variant,
+        variantRows.length + index,
+      ),
+    }));
+
+    if (generatedVariantsWithSku.length === 0) {
+      setErrorMessage("Tất cả tổ hợp biến thể đã tồn tại trong danh sách.");
+      return;
+    }
+
     setVariantRows((previous) =>
-      previous.map((variant) =>
-        variant.localId === localId
-          ? {
-              ...variant,
-              optionValues: {
-                ...(variant.optionValues ?? {}),
-                [optionKey]: nextValue,
-              },
-            }
-          : variant,
+      ensureSingleDefaultVariant(
+        [...previous, ...generatedVariantsWithSku],
+        defaultVariantLocalId || generatedVariantsWithSku[0]?.localId,
       ),
     );
+    resetVariantDraft();
 
     if (errorMessage) {
       setErrorMessage("");
@@ -875,12 +1636,12 @@ export default function VendorProducts() {
         ? parseInputList(form.sizesText)
         : [];
 
-      const normalizedVariants = variantRows
-        .map((variant) => {
-          if (!hasMeaningfulVariantDraft(variant)) {
-            return null;
-          }
-
+      const variantSignatureRegistry = new Set();
+      const normalizedVariants = ensureSingleDefaultVariant(
+        variantRows.filter((variant) => hasMeaningfulVariantDraft(variant)),
+        defaultVariantLocalId,
+      )
+        .map((variant, index) => {
           const variantPrice = String(variant.price ?? "").trim()
             ? Number(variant.price)
             : price;
@@ -907,25 +1668,69 @@ export default function VendorProducts() {
             throw new Error("stock của biến thể phải lớn hơn hoặc bằng 0.");
           }
 
+          const normalizedOptionValues = Object.entries(
+            variant.optionValues ?? {},
+          ).reduce((result, [key, value]) => {
+            const normalizedValue = String(value ?? "").trim();
+
+            if (normalizedValue) {
+              result[key] = normalizedValue;
+            }
+
+            return result;
+          }, {});
+          const normalizedAttributes = Object.entries(
+            variant.attributes ?? {},
+          ).reduce((result, [key, value]) => {
+            const normalizedValue = String(value ?? "").trim();
+
+            if (normalizedValue) {
+              result[key] = normalizedValue;
+            }
+
+            return result;
+          }, {});
+
+          if (
+            normalizedAttributes.colorHex &&
+            !isValidHexColorValue(normalizedAttributes.colorHex)
+          ) {
+            throw new Error("Color HEX của biến thể không hợp lệ.");
+          }
+
+          const variantSignature = buildVariantSignature(
+            category,
+            normalizedOptionValues,
+            normalizedAttributes,
+          );
+
+          if (variantSignature && variantSignatureRegistry.has(variantSignature)) {
+            throw new Error("Có biến thể bị trùng tổ hợp tùy chọn.");
+          }
+
+          if (variantSignature) {
+            variantSignatureRegistry.add(variantSignature);
+          }
+
           return {
-            sku: String(variant.sku ?? "").trim(),
+            sku: resolveVariantSku(
+              category,
+              title,
+              {
+                ...variant,
+                optionValues: normalizedOptionValues,
+                attributes: normalizedAttributes,
+              },
+              index,
+            ),
             title: String(variant.title ?? "").trim(),
             price: variantPrice,
             oldPrice: variantOldPrice,
             stock: variantStock,
             image: String(variant.image ?? "").trim(),
-            optionValues: Object.entries(variant.optionValues ?? {}).reduce(
-              (result, [key, value]) => {
-                const normalizedValue = String(value ?? "").trim();
-
-                if (normalizedValue) {
-                  result[key] = normalizedValue;
-                }
-
-                return result;
-              },
-              {},
-            ),
+            isDefault: Boolean(variant.isDefault),
+            optionValues: normalizedOptionValues,
+            attributes: normalizedAttributes,
           };
         })
         .filter(Boolean);
@@ -1073,7 +1878,7 @@ export default function VendorProducts() {
       let updatedProduct = null;
 
       if (action === "edit") {
-        startEditingProduct(product);
+        await startEditingProduct(product);
         return;
       }
 
@@ -1149,341 +1954,394 @@ export default function VendorProducts() {
     <div className={`vendor-products-page ${isSaving ? "is-saving" : ""}`}>
       <section className="vendor-products-card">
         <h2>{editingId ? "Cập nhật sản phẩm" : "Đăng sản phẩm mới"}</h2>
-        <form className="vendor-products-form" onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit}>
           <fieldset className="vendor-products-fieldset" disabled={isSaving}>
-            <label>
-              Title
-              <input
-                name="title"
-                type="text"
-                value={form.title}
-                onChange={handleInputChange}
-              />
-            </label>
+            <div className="vendor-products-two-col">
+              <div className="vendor-products-left">
+                <div className="vendor-products-form">
+                  <label>
+                    Title
+                    <input
+                      name="title"
+                      type="text"
+                      value={form.title}
+                      onChange={handleInputChange}
+                    />
+                  </label>
 
-            <label>
-              Category
-              <select
-                name="category"
-                value={form.category}
-                onChange={handleInputChange}
-              >
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {categoryOptions.find((item) => item.value === category)
-                      ?.label ?? category}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="is-full">
-              Description
-              <textarea
-                name="description"
-                rows="3"
-                value={form.description}
-                onChange={handleInputChange}
-              />
-            </label>
-
-            <label>
-              Price
-              <input
-                name="price"
-                type="number"
-                min="1"
-                value={form.price}
-                onChange={handleInputChange}
-              />
-            </label>
-
-            <label>
-              Stock
-              <input
-                name="stock"
-                type="number"
-                min="0"
-                value={form.stock}
-                onChange={handleInputChange}
-              />
-            </label>
-
-            <label>
-              <div>Upload thumbnail</div>
-              <div className="vendor-products-file-picker">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleSelectThumbnailFile}
-                />
-                <input
-                  name="thumbnailUrl"
-                  type="url"
-                  placeholder="https://example.com/thumbnail.jpg"
-                  value={form.thumbnailUrl}
-                  onChange={handleInputChange}
-                />
-                <span className="vendor-products-file-summary">
-                  Bạn có thể dán link ảnh thumbnail. Nếu chọn cả file và link,
-                  file upload sẽ được ưu tiên.
-                </span>
-
-                {existingThumbnail && (
-                  <div className="vendor-products-image-list">
-                    <button
-                      type="button"
-                      className="vendor-products-image-thumb"
-                      onClick={handleRequestRemoveExistingThumbnail}
-                      title={`Xóa ảnh ${getStoredImageLabel(
-                        existingThumbnail,
-                        "Thumbnail hiện tại",
-                      )}`}
+                  <label>
+                    Category
+                    <select
+                      name="category"
+                      value={form.category}
+                      onChange={handleInputChange}
                     >
-                      <img src={existingThumbnail} alt="Current thumbnail" />
-                    </button>
-                  </div>
-                )}
+                      {categories.map((category) => (
+                        <option key={category} value={category}>
+                          {categoryOptions.find((item) => item.value === category)
+                            ?.label ?? category}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-                {selectedThumbnailFile && (
-                  <div className="vendor-products-file-list">
-                    <button
-                      type="button"
-                      className="vendor-products-file-chip"
-                      onClick={handleRemoveSelectedThumbnailFile}
-                      title={`Xóa ảnh ${selectedThumbnailFile.name}`}
-                    >
-                      {selectedThumbnailFile.name}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </label>
+                  <label className="is-full">
+                    Description
+                    <textarea
+                      name="description"
+                      rows="3"
+                      value={form.description}
+                      onChange={handleInputChange}
+                    />
+                  </label>
 
-            <label>
-              Upload gallery images
-              <div className="vendor-products-file-picker">
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleSelectGalleryFiles}
-                />
-                <textarea
-                  name="galleryUrlsText"
-                  rows="3"
-                  placeholder={
-                    "https://example.com/gallery-1.jpg\nhttps://example.com/gallery-2.jpg"
-                  }
-                  value={form.galleryUrlsText}
-                  onChange={handleInputChange}
-                />
-                <span className="vendor-products-file-summary">
-                  Mỗi link một dòng hoặc ngăn cách bằng dấu phẩy. Nếu bạn chọn
-                  file gallery mới, bộ gallery hiện tại sẽ được thay bằng các
-                  file vừa chọn.
-                </span>
+                  <label>
+                    Price
+                    <input
+                      name="price"
+                      type="number"
+                      min="1"
+                      value={form.price}
+                      onChange={handleInputChange}
+                    />
+                  </label>
 
-                {existingGalleryImages.length > 0 && (
-                  <div className="vendor-products-image-list">
-                    {existingGalleryImages.map((image, index) => (
-                      <button
-                        key={`${String(image)}-${index}`}
-                        type="button"
-                        className="vendor-products-image-thumb"
-                        onClick={() =>
-                          handleRequestRemoveExistingGalleryImage(image, index)
+                  <label>
+                    Stock
+                    <input
+                      name="stock"
+                      type="number"
+                      min="0"
+                      value={form.stock}
+                      onChange={handleInputChange}
+                    />
+                  </label>
+
+                  <label className="is-full">
+                    <div>Upload thumbnail</div>
+                    <div className="vendor-products-file-picker">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleSelectThumbnailFile}
+                      />
+                      <input
+                        name="thumbnailUrl"
+                        type="url"
+                        placeholder="https://example.com/thumbnail.jpg"
+                        value={form.thumbnailUrl}
+                        onChange={handleInputChange}
+                      />
+
+
+                      {existingThumbnail && (
+                        <div className="vendor-products-image-list">
+                          <button
+                            type="button"
+                            className="vendor-products-image-thumb"
+                            onClick={handleRequestRemoveExistingThumbnail}
+                            title={`Xóa ảnh ${getStoredImageLabel(
+                              existingThumbnail,
+                              "Thumbnail hiện tại",
+                            )}`}
+                          >
+                            <img src={existingThumbnail} alt="Current thumbnail" />
+                          </button>
+                        </div>
+                      )}
+
+                      {selectedThumbnailFile && (
+                        <div className="vendor-products-file-list">
+                          <button
+                            type="button"
+                            className="vendor-products-file-chip"
+                            onClick={handleRemoveSelectedThumbnailFile}
+                            title={`Xóa ảnh ${selectedThumbnailFile.name}`}
+                          >
+                            {selectedThumbnailFile.name}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+
+                  <label className="is-full">
+                    Upload gallery images
+                    <div className="vendor-products-file-picker">
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleSelectGalleryFiles}
+                      />
+                      <textarea
+                        name="galleryUrlsText"
+                        rows="3"
+                        placeholder={
+                          "https://example.com/gallery-1.jpg\nhttps://example.com/gallery-2.jpg"
                         }
-                        title={`Xóa ảnh ${getStoredImageLabel(
-                          image,
-                          `Gallery image ${index + 1}`,
-                        )}`}
-                      >
-                        <img src={image} alt={`Current gallery ${index + 1}`} />
-                      </button>
-                    ))}
-                  </div>
-                )}
+                        value={form.galleryUrlsText}
+                        onChange={handleInputChange}
+                      />
+                    
+                      {existingGalleryImages.length > 0 && (
+                        <div className="vendor-products-image-list">
+                          {existingGalleryImages.map((image, index) => (
+                            <button
+                              key={`${String(image)}-${index}`}
+                              type="button"
+                              className="vendor-products-image-thumb"
+                              onClick={() =>
+                                handleRequestRemoveExistingGalleryImage(image, index)
+                              }
+                              title={`Xóa ảnh ${getStoredImageLabel(
+                                image,
+                                `Gallery image ${index + 1}`,
+                              )}`}
+                            >
+                              <img src={image} alt={`Current gallery ${index + 1}`} />
+                            </button>
+                          ))}
+                        </div>
+                      )}
 
-                {selectedGalleryFiles.length > 0 && (
-                  <div className="vendor-products-file-list">
-                    {selectedGalleryFiles.map((file) => (
-                      <button
-                        key={getSelectedFileKey(file)}
-                        type="button"
-                        className="vendor-products-file-chip"
-                        onClick={() => handleRemoveSelectedGalleryFile(file)}
-                        title={`Xóa ảnh ${file.name}`}
-                      >
-                        {file.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </label>
+                      {selectedGalleryFiles.length > 0 && (
+                        <div className="vendor-products-file-list">
+                          {selectedGalleryFiles.map((file) => (
+                            <button
+                              key={getSelectedFileKey(file)}
+                              type="button"
+                              className="vendor-products-file-chip"
+                              onClick={() => handleRemoveSelectedGalleryFile(file)}
+                              title={`Xóa ảnh ${file.name}`}
+                            >
+                              {file.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </label>
 
-            {selectedCategoryConfig.flags.useColors && (
-              <label>
-                Colors (hex)
-                <input
-                  name="colorsText"
-                  type="text"
-                  placeholder="#000000, #ff8800"
-                  value={form.colorsText}
-                  onChange={handleInputChange}
-                />
-              </label>
-            )}
+                  {selectedCategoryConfig.flags.useColors && (
+                    <label>
+                      Colors (hex)
+                      <input
+                        name="colorsText"
+                        type="text"
+                        placeholder="#000000, #ff8800"
+                        value={form.colorsText}
+                        onChange={handleInputChange}
+                      />
+                    </label>
+                  )}
 
-            {selectedCategoryConfig.flags.useSizes && (
-              <label>
-                Sizes
-                <input
-                  name="sizesText"
-                  type="text"
-                  placeholder="S, M, L hoặc Standard, Combo..."
-                  value={form.sizesText}
-                  onChange={handleInputChange}
-                />
-              </label>
-            )}
+                  {selectedCategoryConfig.flags.useSizes && (
+                    <label>
+                      Sizes
+                      <input
+                        name="sizesText"
+                        type="text"
+                        placeholder="S, M, L hoặc Standard, Combo..."
+                        value={form.sizesText}
+                        onChange={handleInputChange}
+                      />
+                    </label>
+                  )}
 
-            {selectedCategoryConfig.flags.useBrand && (
-              <label>
-                Brand
-                <input
-                  name="brand"
-                  type="text"
-                  placeholder={
-                    form.category === "fashion-nam" ||
-                    form.category === "fashion-nu"
-                      ? "VD: Zara, H&M"
-                      : "VD: Samsung, Lock&Lock, Orion"
-                  }
-                  value={form.brand}
-                  onChange={handleInputChange}
-                />
-              </label>
-            )}
+                  {selectedCategoryConfig.flags.useBrand && (
+                    <label>
+                      Brand
+                      <input
+                        name="brand"
+                        type="text"
+                        placeholder={
+                          form.category === "fashion-nam" ||
+                          form.category === "fashion-nu"
+                            ? "VD: Zara, H&M"
+                            : "VD: Samsung, Lock&Lock, Orion"
+                        }
+                        value={form.brand}
+                        onChange={handleInputChange}
+                      />
+                    </label>
+                  )}
 
-            {selectedCategoryConfig.flags.useMaterial && (
-              <label>
-                Material
-                <input
-                  name="material"
-                  type="text"
-                  placeholder={
-                    form.category === "do-gia-dung"
-                      ? "Nhựa, gỗ, inox..."
-                      : "Cotton, Linen..."
-                  }
-                  value={form.material}
-                  onChange={handleInputChange}
-                />
-              </label>
-            )}
+                  {selectedCategoryConfig.flags.useMaterial && (
+                    <label>
+                      Material
+                      <input
+                        name="material"
+                        type="text"
+                        placeholder={
+                          form.category === "do-gia-dung"
+                            ? "Nhựa, gỗ, inox..."
+                            : "Cotton, Linen..."
+                        }
+                        value={form.material}
+                        onChange={handleInputChange}
+                      />
+                    </label>
+                  )}
 
-            {selectedCategoryConfig.flags.useElectronicsFields && (
-              <>
-                <label>
-                  Model
-                  <input
-                    name="model"
-                    type="text"
-                    placeholder="VD: X200 Pro"
-                    value={form.model}
-                    onChange={handleInputChange}
-                  />
-                </label>
+                  {selectedCategoryConfig.flags.useElectronicsFields && (
+                    <>
+                      <label>
+                        Model
+                        <input
+                          name="model"
+                          type="text"
+                          placeholder="VD: X200 Pro"
+                          value={form.model}
+                          onChange={handleInputChange}
+                        />
+                      </label>
 
-                <label>
-                  Warranty (months)
-                  <input
-                    name="warrantyMonths"
-                    type="number"
-                    min="0"
-                    value={form.warrantyMonths}
-                    onChange={handleInputChange}
-                  />
-                </label>
-              </>
-            )}
+                      <label>
+                        Warranty (months)
+                        <input
+                          name="warrantyMonths"
+                          type="number"
+                          min="0"
+                          value={form.warrantyMonths}
+                          onChange={handleInputChange}
+                        />
+                      </label>
+                    </>
+                  )}
 
-            {selectedCategoryConfig.flags.useFoodFields && (
-              <>
-                <label>
-                  Expiry date
-                  <input
-                    name="expiryDate"
-                    type="date"
-                    value={form.expiryDate}
-                    onChange={handleInputChange}
-                  />
-                </label>
+                  {selectedCategoryConfig.flags.useFoodFields && (
+                    <>
+                      <label>
+                        Expiry date
+                        <input
+                          name="expiryDate"
+                          type="date"
+                          value={form.expiryDate}
+                          onChange={handleInputChange}
+                        />
+                      </label>
 
-                <label>
-                  Weight / Volume
-                  <input
-                    name="weight"
-                    type="text"
-                    placeholder="500g, 1L..."
-                    value={form.weight}
-                    onChange={handleInputChange}
-                  />
-                </label>
-              </>
-            )}
-
-            <div className="vendor-products-variants is-full">
-              <div className="vendor-products-variants__header">
-                <div>
-                  <strong>Variants</strong>
-                  <p>
-                    Thêm các biến thể theo danh mục hiện tại. Nếu bạn để trống,
-                    backend sẽ tự tạo 1 biến thể mặc định từ price và stock ở
-                    trên.
-                  </p>
+                      <label>
+                        Weight / Volume
+                        <input
+                          name="weight"
+                          type="text"
+                          placeholder="500g, 1L..."
+                          value={form.weight}
+                          onChange={handleInputChange}
+                        />
+                      </label>
+                    </>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  className="vendor-products-variants__add-btn"
-                  onClick={handleAddVariantRow}
-                >
-                  Add variant
-                </button>
               </div>
 
-              <div className="vendor-products-variant-list">
-                {variantRows.map((variant, index) => (
-                  <div
-                    className="vendor-products-variant-card"
-                    key={variant.localId}
-                  >
-                    <div className="vendor-products-variant-card__header">
-                      <strong>Variant {index + 1}</strong>
+              <div className="vendor-products-right">
+                <div className="vendor-products-variants">
+                  <div className="vendor-products-variants__header">
+                    <div>
+                      <strong>Variants</strong>
+                      <p>
+                        Dùng Generate variants để sinh nhanh các tổ hợp. Sau đó bạn có
+                        thể chỉnh từng biến thể và lưu toàn bộ cùng sản phẩm.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="vendor-products-variant-generator">
+                    <div className="vendor-products-variant-generator__grid">
+                      {selectedVariantFields.map((field) => (
+                        <label key={`generator-${field.key}`}>
+                          {field.label} values
+                          <input
+                            type="text"
+                            placeholder={`VD: ${field.label} 1, ${field.label} 2`}
+                            value={variantGeneratorInputs[field.key] ?? ""}
+                            onChange={(event) =>
+                              handleVariantGeneratorChange(field.key, event.target.value)
+                            }
+                          />
+                        </label>
+                      ))}
+                      {selectedVariantAttributeFields.map((field) => (
+                        <label key={`generator-attr-${field.key}`}>
+                          {field.label}
+                          <input
+                            type="text"
+                            placeholder={`VD: ${field.label} 1, ${field.label} 2`}
+                            value={variantGeneratorInputs[field.key] ?? ""}
+                            onChange={(event) =>
+                              handleVariantGeneratorChange(field.key, event.target.value)
+                            }
+                          />
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="vendor-products-variant-generator__actions">
                       <button
                         type="button"
-                        className="vendor-products-variant-card__remove-btn"
-                        onClick={() => handleRemoveVariantRow(variant.localId)}
+                        className="vendor-products-variants__generate-btn"
+                        onClick={handleGenerateVariants}
                       >
-                        Remove
+                        Generate variants
                       </button>
+                    </div>
+                  </div>
+
+                  <div className="vendor-products-variant-card">
+                    <div className="vendor-products-variant-card__header">
+                      <strong>
+                        {editingVariantLocalId ? "Edit variant" : "Variant editor"}
+                      </strong>
+                      {editingVariantLocalId && (
+                        <button
+                          type="button"
+                          className="vendor-products-variant-card__remove-btn"
+                          onClick={resetVariantDraft}
+                        >
+                          Cancel edit
+                        </button>
+                      )}
                     </div>
 
                     <div className="vendor-products-variant-grid">
                       {selectedVariantFields.map((field) => (
-                        <label key={`${variant.localId}-${field.key}`}>
+                        <label key={`draft-${field.key}`}>
                           {field.label}
                           <input
                             type="text"
-                            value={variant.optionValues?.[field.key] ?? ""}
+                            value={variantDraft.optionValues?.[field.key] ?? ""}
                             onChange={(event) =>
-                              handleVariantOptionChange(
-                                variant.localId,
-                                field.key,
-                                event.target.value,
-                              )
+                              handleVariantOptionChange(field.key, event.target.value)
+                            }
+                          />
+                        </label>
+                      ))}
+
+                      {hasColorVariantField(form.category) && (
+                        <label key="draft-color-hex">
+                          Color HEX (optional)
+                          <input
+                            type="text"
+                            placeholder="#ff0000"
+                            value={variantDraft.attributes?.colorHex ?? ""}
+                            onChange={(event) =>
+                              handleVariantAttributeChange("colorHex", event.target.value)
+                            }
+                          />
+                        </label>
+                      )}
+
+                      {selectedVariantAttributeFields.map((field) => (
+                        <label key={`draft-attr-${field.key}`}>
+                          {field.label}
+                          <input
+                            type="text"
+                            value={variantDraft.attributes?.[field.key] ?? ""}
+                            onChange={(event) =>
+                              handleVariantAttributeChange(field.key, event.target.value)
                             }
                           />
                         </label>
@@ -1493,13 +2351,9 @@ export default function VendorProducts() {
                         SKU
                         <input
                           type="text"
-                          value={variant.sku}
+                          value={variantDraft.sku}
                           onChange={(event) =>
-                            handleVariantFieldChange(
-                              variant.localId,
-                              "sku",
-                              event.target.value,
-                            )
+                            handleVariantFieldChange("sku", event.target.value)
                           }
                         />
                       </label>
@@ -1508,13 +2362,9 @@ export default function VendorProducts() {
                         Variant title
                         <input
                           type="text"
-                          value={variant.title}
+                          value={variantDraft.title}
                           onChange={(event) =>
-                            handleVariantFieldChange(
-                              variant.localId,
-                              "title",
-                              event.target.value,
-                            )
+                            handleVariantFieldChange("title", event.target.value)
                           }
                         />
                       </label>
@@ -1524,13 +2374,9 @@ export default function VendorProducts() {
                         <input
                           type="number"
                           min="0"
-                          value={variant.price}
+                          value={variantDraft.price}
                           onChange={(event) =>
-                            handleVariantFieldChange(
-                              variant.localId,
-                              "price",
-                              event.target.value,
-                            )
+                            handleVariantFieldChange("price", event.target.value)
                           }
                         />
                       </label>
@@ -1540,13 +2386,9 @@ export default function VendorProducts() {
                         <input
                           type="number"
                           min="0"
-                          value={variant.oldPrice}
+                          value={variantDraft.oldPrice}
                           onChange={(event) =>
-                            handleVariantFieldChange(
-                              variant.localId,
-                              "oldPrice",
-                              event.target.value,
-                            )
+                            handleVariantFieldChange("oldPrice", event.target.value)
                           }
                         />
                       </label>
@@ -1556,13 +2398,9 @@ export default function VendorProducts() {
                         <input
                           type="number"
                           min="0"
-                          value={variant.stock}
+                          value={variantDraft.stock}
                           onChange={(event) =>
-                            handleVariantFieldChange(
-                              variant.localId,
-                              "stock",
-                              event.target.value,
-                            )
+                            handleVariantFieldChange("stock", event.target.value)
                           }
                         />
                       </label>
@@ -1572,20 +2410,232 @@ export default function VendorProducts() {
                         <input
                           type="url"
                           placeholder="https://example.com/variant-image.jpg"
-                          value={variant.image}
+                          value={variantDraft.image}
                           onChange={(event) =>
-                            handleVariantFieldChange(
-                              variant.localId,
-                              "image",
-                              event.target.value,
-                            )
+                            handleVariantFieldChange("image", event.target.value)
                           }
                         />
                       </label>
+
+                      <label className="vendor-products-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(variantDraft.isDefault)}
+                          onChange={(event) =>
+                            handleVariantFieldChange("isDefault", event.target.checked)
+                          }
+                        />
+                        <span>Set as default variant</span>
+                      </label>
+                    </div>
+
+                    <div className="vendor-products-variant-editor__actions">
+                      <button
+                        type="button"
+                        className="vendor-products-variants__add-btn"
+                        onClick={handleSaveVariantDraft}
+                      >
+                        {editingVariantLocalId ? "Update variant" : "Add to list"}
+                      </button>
                     </div>
                   </div>
-                ))}
+                </div>
               </div>
+            </div>
+
+            <div className="vendor-products-variant-summary">
+              <div className="vendor-products-variant-summary__header">
+                <strong>Variant list</strong>
+                <span>{variantRows.length} variants</span>
+              </div>
+
+              <div>
+                <span>Bulk apply from editor:</span>
+                <div className="vendor-products-variant-summary__bulk-actions">
+                  <button
+                    type="button"
+                    className="vendor-products-variant-summary__action-btn vendor-products-variant-summary__action-btn--secondary"
+                    onClick={() => handleBulkApply("price")}
+                  >
+                    Apply price
+                  </button>
+                  <button
+                    type="button"
+                    className="vendor-products-variant-summary__action-btn vendor-products-variant-summary__action-btn--secondary"
+                    onClick={() => handleBulkApply("oldPrice")}
+                  >
+                    Apply old price
+                  </button>
+                  <button
+                    type="button"
+                    className="vendor-products-variant-summary__action-btn vendor-products-variant-summary__action-btn--secondary"
+                    onClick={() => handleBulkApply("stock")}
+                  >
+                    Apply stock
+                  </button>
+                  <button
+                    type="button"
+                    className="vendor-products-variant-summary__action-btn vendor-products-variant-summary__action-btn--secondary"
+                    onClick={() => handleBulkApply("image")}
+                  >
+                    Apply image
+                  </button>
+                </div>
+              </div>
+
+              {variantRows.length === 0 ? (
+                <p className="vendor-products-variant-summary__empty">
+                  Chưa có biến thể nào trong danh sách. Bạn có thể generate hoặc
+                  thêm thủ công từ editor phía trên.
+                </p>
+              ) : (
+                <div className="vendor-products-variant-table-wrapper">
+                  <div className="vendor-products-variant-table">
+                    <div className="vendor-products-variant-table__row vendor-products-variant-table__head">
+                      <span>Image</span>
+                      <span>Variant</span>
+                      <span>SKU</span>
+                      <span>Price</span>
+                      <span>Old price</span>
+                      <span>Stock</span>
+                      <span>Status</span>
+                      <span>Default</span>
+                      <span>Actions</span>
+                    </div>
+                    {variantRows.map((variant, index) => {
+                      const variantImage =
+                        normalizeImageSource(variant.image) ||
+                        normalizeImageSource(form.thumbnailUrl) ||
+                        existingThumbnail;
+                      const displayedSku = resolveVariantSku(
+                        form.category,
+                        form.title,
+                        variant,
+                        index,
+                      );
+                      const variantPrice = Number(
+                        String(variant.price ?? "").trim() || form.price || 0,
+                      );
+                      const variantOldPrice = Number(
+                        String(variant.oldPrice ?? "").trim() ||
+                          variant.price ||
+                          form.price ||
+                          0,
+                      );
+                      const variantStock = Number(
+                        String(variant.stock ?? "").trim() || 0,
+                      );
+
+                      const isDuplicate = duplicateLocalIds.has(
+                        String(variant.localId),
+                      );
+
+                      return (
+                        <div
+                          key={variant.localId}
+                          className={`vendor-products-variant-table__row ${isDuplicate ? "is-duplicate" : ""}`}
+                        >
+                          <span className="vendor-products-variant-table__media">
+                            <div className="vendor-products-variant-summary__media">
+                              {variantImage ? (
+                                <img src={variantImage} alt={buildVariantLabel(form.category, variant)} />
+                              ) : (
+                                <span>No image</span>
+                              )}
+                            </div>
+                          </span>
+                          <span>{buildVariantLabel(form.category, variant)}</span>
+                          <span>{displayedSku}</span>
+                          <span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={String(variant.price ?? "")}
+                              onChange={(e) =>
+                                handleInlineVariantChange(
+                                  variant.localId,
+                                  "price",
+                                  e.target.value,
+                                )
+                              }
+                            />
+                          </span>
+                          <span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={String(variant.oldPrice ?? "")}
+                              onChange={(e) =>
+                                handleInlineVariantChange(
+                                  variant.localId,
+                                  "oldPrice",
+                                  e.target.value,
+                                )
+                              }
+                            />
+                          </span>
+                          <span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={String(variant.stock ?? "")}
+                              onChange={(e) =>
+                                handleInlineVariantChange(
+                                  variant.localId,
+                                  "stock",
+                                  e.target.value,
+                                )
+                              }
+                            />
+                          </span>
+                          <span>
+                            <span
+                              className={`vendor-products-variant-summary__badge ${
+                                variantStock > 0
+                                  ? "vendor-products-variant-summary__badge--stock"
+                                  : "vendor-products-variant-summary__badge--out"
+                              }`}
+                            >
+                              {variantStock > 0 ? "In stock" : "Out of stock"}
+                            </span>
+                          </span>
+                          <span>
+                            <input
+                              type="radio"
+                              name="vendor-default-variant"
+                              checked={!!variant.isDefault}
+                              onChange={() => handleSetDefaultVariant(variant.localId)}
+                              aria-label="Set as default variant"
+                            />
+                          </span>
+                          <span className="vendor-products-variant-table__actions">
+                            <span className="vendor-action-control">
+                              <button
+                                type="button"
+                                className="vendor-action-btn vendor-action-btn--icon vendor-action-btn--edit"
+                                onClick={() => handleEditVariant(variant.localId)}
+                                title="Edit variant"
+                                aria-label="Edit variant"
+                              >
+                                <EditIcon />
+                              </button>
+                              <button
+                                type="button"
+                                className="vendor-action-btn vendor-action-btn--icon vendor-action-btn--delete"
+                                onClick={() => handleRemoveVariantRow(variant.localId)}
+                                title="Delete variant"
+                                aria-label="Delete variant"
+                              >
+                                <XIcon />
+                              </button>
+                            </span>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {errorMessage && (
@@ -1596,6 +2646,18 @@ export default function VendorProducts() {
               <button type="button" onClick={resetForm} disabled={isSaving}>
                 Reset
               </button>
+              {canUpdateLive && (
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  className="vendor-products-actions__live-btn"
+                  onClick={() => {
+                    void handleSaveProduct(PRODUCT_STATUS.ACTIVE);
+                  }}
+                >
+                  Update live (keep Active)
+                </button>
+              )}
               <button
                 type="button"
                 disabled={isSaving}
@@ -1808,7 +2870,6 @@ export default function VendorProducts() {
           </div>
         </div>
       )}
-      d.admin-sidebar{" "}
     </div>
   );
 }

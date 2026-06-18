@@ -289,6 +289,12 @@ export default function MyOrders() {
         orderId,
         status,
         statusLabel,
+        paymentMethod: String(order?.paymentMethod ?? "cod")
+          .trim()
+          .toLowerCase(),
+        paymentStatus: String(order?.paymentStatus ?? "unpaid")
+          .trim()
+          .toLowerCase(),
         statusGroup,
         orderItems,
         reviewableItems,
@@ -310,6 +316,15 @@ export default function MyOrders() {
         cancellationReason: String(order?.cancellation?.reason ?? "").trim(),
         cancellationAt: order?.cancellation?.at ?? null,
         displayDate: formatDate(order?.createdAt),
+        canRetryPayment:
+          String(order?.paymentMethod ?? "")
+            .trim()
+            .toLowerCase() === "sepay" &&
+          ["pending", "failed"].includes(
+            String(order?.paymentStatus ?? "")
+              .trim()
+              .toLowerCase(),
+          ),
       };
     });
   }, [myOrders, productMapById, userEmail, vendorMapByEmail]);
@@ -779,6 +794,11 @@ export default function MyOrders() {
                             Đơn đang ở trạng thái chờ xác nhận. Bạn có thể hủy
                             đơn trong giai đoạn này.
                           </p>
+                        ) : order.canRetryPayment ? (
+                          <p>
+                            Thanh toán SePay của đơn này đang ở trạng thái{" "}
+                            {order.paymentStatus}. Bạn có thể tiếp tục thanh toán.
+                          </p>
                         ) : (
                           <p>
                             Đơn đang ở trạng thái{" "}
@@ -867,6 +887,15 @@ export default function MyOrders() {
                           >
                             Xem shop
                           </Link>
+
+                          {order.canRetryPayment ? (
+                            <Link
+                              to={`/payment/result?result=pending&provider=sepay&orderId=${encodeURIComponent(order.orderId)}`}
+                              className="my-orders-button my-orders-button--primary"
+                            >
+                              Tiếp tục thanh toán
+                            </Link>
+                          ) : null}
 
                           {canCancel ? (
                             <button

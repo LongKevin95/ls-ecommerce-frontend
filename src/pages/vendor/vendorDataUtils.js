@@ -176,8 +176,8 @@ export function resolveOrderCustomer(order) {
 export function resolvePaymentMethodLabel(method) {
   const normalized = normalizeText(method, "cod").toLowerCase();
 
-  if (normalized === "card") {
-    return "Card";
+  if (normalized === "card" || normalized === "sepay") {
+    return "SePay";
   }
 
   return "COD";

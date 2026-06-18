@@ -253,6 +253,7 @@
   gap: 14px;
 }
 
+
 .option-row h3 {
   min-width: 68px;
   font-size: 22px;
@@ -279,9 +280,25 @@
   outline-offset: 2px;
 }
 
+.color-option-label {
+background-color: transparent;
+padding: 8px;
+cursor: pointer;
+}
+.color-option-label.is-active{
+  background-color: black;
+  color: white;
+}
+
+.color-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .size-options {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -297,6 +314,37 @@
   background: #111;
   color: #fff;
   border-color: #111;
+}
+
+.size-options button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.variant-option-buttons {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px; 
+}
+
+.variant-option-buttons button {
+    cursor: pointer;
+    background: #fff;
+    border: 1px solid #d6d6d6;
+    min-width: 42px;
+    height: 38px;
+}
+
+.variant-option-buttons button.is-active {
+  background: #111827;
+  color: #fff;
+  border-color: #111827;
+}
+
+.variant-option-buttons button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .actions-row {
@@ -685,6 +733,10 @@ body[data-theme="dark"] .color-option.is-active {
   outline-color: #e5ff52;
 }
 
+body[data-theme="dark"] .color-option:disabled {
+  opacity: 0.4;
+}
+
 body[data-theme="dark"] .size-options button {
   border-color: rgba(255, 255, 255, 0.12);
   background: #151922;
@@ -692,6 +744,23 @@ body[data-theme="dark"] .size-options button {
 }
 
 body[data-theme="dark"] .size-options button.is-active {
+  background: #e5ff52;
+  color: #101418;
+  border-color: #e5ff52;
+}
+
+body[data-theme="dark"] .size-options button:disabled,
+body[data-theme="dark"] .variant-option-buttons button:disabled {
+  opacity: 0.45;
+}
+
+body[data-theme="dark"] .variant-option-buttons button {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: #151922;
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .variant-option-buttons button.is-active {
   background: #e5ff52;
   color: #101418;
   border-color: #e5ff52;
@@ -885,6 +954,16 @@ body[data-theme="dark"] .stock-modal button:hover {
   .product-gallery__thumbs {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
+  }
+
+  .option-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .option-row h3 {
+    min-width: 0;
+    font-size: 20px;
   }
 
   .actions-row {

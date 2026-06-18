@@ -139,11 +139,27 @@ function normalizePaymentMethod(method) {
     return "cod";
   }
 
-  if (["cod", "card"].includes(rawMethod)) {
+  if (rawMethod === "card") {
+    return "sepay";
+  }
+
+  if (["cod", "sepay"].includes(rawMethod)) {
     return rawMethod;
   }
 
   return "cod";
+}
+
+function normalizePaymentStatusValue(status, paymentMethod) {
+  const rawStatus = String(status ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (rawStatus) {
+    return rawStatus;
+  }
+
+  return paymentMethod === "sepay" ? "pending" : "unpaid";
 }
 
 function normalizeShippingAddress(address, order) {
@@ -254,6 +270,7 @@ function normalizeOrder(order) {
       ? order.vendorItems
       : [];
   const normalizedStatus = normalizeOrderStatusValue(order?.status);
+  const normalizedPaymentMethod = normalizePaymentMethod(order?.paymentMethod);
   const shippingAddress = normalizeShippingAddress(
     order?.shippingAddress,
     order,
@@ -279,6 +296,37 @@ function normalizeOrder(order) {
       order?.customerPhone ?? shippingAddress.phone ?? "",
     ),
     status: normalizedStatus || "pending",
+    paymentMethod: normalizedPaymentMethod,
+    paymentProvider: normalizeText(order?.paymentProvider ?? "manual").toLowerCase(),
+    paymentStatus: normalizePaymentStatusValue(
+      order?.paymentStatus,
+      normalizedPaymentMethod,
+    ),
+    paymentCode: normalizeText(order?.paymentCode ?? ""),
+    paymentInvoiceNumber: normalizeText(order?.paymentInvoiceNumber ?? ""),
+    paymentExpiresAt: order?.paymentExpiresAt ?? null,
+    paidAt: order?.paidAt ?? null,
+    paymentMeta:
+      order?.paymentMeta && typeof order.paymentMeta === "object"
+        ? {
+            sepayOrderId: normalizeText(order.paymentMeta?.sepayOrderId ?? ""),
+            sepayTransactionId: normalizeText(
+              order.paymentMeta?.sepayTransactionId ?? "",
+            ),
+            providerTransactionId: normalizeText(
+              order.paymentMeta?.providerTransactionId ?? "",
+            ),
+            providerStatus: normalizeText(order.paymentMeta?.providerStatus ?? ""),
+            gateway: normalizeText(order.paymentMeta?.gateway ?? ""),
+            referenceCode: normalizeText(order.paymentMeta?.referenceCode ?? ""),
+            paymentChannel: normalizeText(order.paymentMeta?.paymentChannel ?? ""),
+            cardBrand: normalizeText(order.paymentMeta?.cardBrand ?? ""),
+            cardNumberMasked: normalizeText(
+              order.paymentMeta?.cardNumberMasked ?? "",
+            ),
+            lastWebhookAt: order.paymentMeta?.lastWebhookAt ?? null,
+          }
+        : null,
     items: items.map((item) => ({
       productId: normalizeText(item?.productId ?? item?.id ?? ""),
       variantId: normalizeText(item?.variantId ?? ""),
@@ -294,7 +342,6 @@ function normalizeOrder(order) {
       size: normalizeText(item?.size ?? "M", "M"),
     })),
     total: Number(order?.total ?? 0),
-    paymentMethod: normalizePaymentMethod(order?.paymentMethod),
     shippingAddress,
     cancellation:
       order?.cancellation && typeof order.cancellation === "object"

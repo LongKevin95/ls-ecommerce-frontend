@@ -23,5 +23,5 @@ export const checkoutSchema = z.object({
   country: z.string().trim().min(1, "Thiếu country."),
   phone: z.string().trim().min(1, "Thiếu phone."),
   email: z.email("Email liên hệ không hợp lệ."),
-  paymentMethod: z.enum(["cod", "card"]),
+  paymentMethod: z.enum(["cod", "sepay"]),
 });

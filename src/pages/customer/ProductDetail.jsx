@@ -61,6 +61,82 @@ function buildFieldEntries(fields, values) {
     : [];
 }
 
+function normalizeOptionValue(value) {
+  return String(value ?? "").trim();
+}
+
+function normalizeHexColorValue(value) {
+  return String(value ?? "").trim();
+}
+
+function isValidHexColorValue(value) {
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalizeHexColorValue(value));
+}
+
+function getVariantColorHex(variant) {
+  const colorHex = normalizeHexColorValue(variant?.attributes?.colorHex);
+  return isValidHexColorValue(colorHex) ? colorHex : "";
+}
+
+function getVariantOptionValue(variant, key) {
+  return normalizeOptionValue(variant?.optionValues?.[key]);
+}
+
+function variantMatchesSelections(variant, selections, ignoredKey = "") {
+  return Object.entries(selections ?? {}).every(([key, value]) => {
+    if (key === ignoredKey) {
+      return true;
+    }
+
+    const normalizedValue = normalizeOptionValue(value);
+
+    if (!normalizedValue) {
+      return true;
+    }
+
+    return getVariantOptionValue(variant, key) === normalizedValue;
+  });
+}
+
+function findBestMatchingVariant(
+  variants,
+  currentSelections,
+  targetFieldKey,
+  targetFieldValue,
+) {
+  const normalizedFieldKey = String(targetFieldKey ?? "").trim();
+  const normalizedFieldValue = normalizeOptionValue(targetFieldValue);
+  const variantList = Array.isArray(variants) ? variants : [];
+
+  if (!normalizedFieldKey || !normalizedFieldValue || variantList.length === 0) {
+    return null;
+  }
+
+  const nextSelections = {
+    ...(currentSelections ?? {}),
+    [normalizedFieldKey]: normalizedFieldValue,
+  };
+
+  return (
+    variantList.find(
+      (variant) =>
+        Number(variant?.stock ?? 0) > 0 &&
+        variantMatchesSelections(variant, nextSelections),
+    ) ??
+    variantList.find((variant) => variantMatchesSelections(variant, nextSelections)) ??
+    variantList.find(
+      (variant) =>
+        Number(variant?.stock ?? 0) > 0 &&
+        getVariantOptionValue(variant, normalizedFieldKey) === normalizedFieldValue,
+    ) ??
+    variantList.find(
+      (variant) =>
+        getVariantOptionValue(variant, normalizedFieldKey) === normalizedFieldValue,
+    ) ??
+    null
+  );
+}
+
 function ProductDetail() {
   const { id } = useParams();
   const { user, isAdmin, isCustomer, isVendor } = useAuth();
@@ -150,17 +226,6 @@ function ProductDetail() {
   const [selectedSizeByProduct, setSelectedSizeByProduct] = useState({});
   const [replyTextByReview, setReplyTextByReview] = useState({});
   const [processingReplyKey, setProcessingReplyKey] = useState("");
-  const {
-    data: detailProduct = null,
-    isLoading: isDetailLoading,
-    isError: isDetailError,
-  } = useQuery({
-    queryKey: ["products", "detail", String(id ?? "")],
-    queryFn: () => getProductById(id),
-    enabled: Boolean(id),
-    staleTime: 1000 * 60 * 5,
-  });
-
   const previewProduct = useMemo(() => {
     const locationProduct = location.state?.product;
 
@@ -174,8 +239,7 @@ function ProductDetail() {
 
     return locationProduct;
   }, [id, location.state]);
-
-  const resolvedProduct = useMemo(() => {
+  const resolvedProductFromLists = useMemo(() => {
     const matched =
       products.find((item) => String(item.id) === String(id)) ?? null;
 
@@ -220,8 +284,18 @@ function ProductDetail() {
     user?.email,
     withVendorDisplay,
   ]);
+  const {
+    data: detailProduct = null,
+    isLoading: isDetailLoading,
+    isError: isDetailError,
+  } = useQuery({
+    queryKey: ["products", "detail", String(id ?? "")],
+    queryFn: () => getProductById(id),
+    enabled: Boolean(id) && !(canInspectHiddenProducts && resolvedProductFromLists),
+    staleTime: 1000 * 60 * 5,
+  });
 
-  const product = detailProduct ?? resolvedProduct ?? previewProduct;
+  const product = detailProduct ?? resolvedProductFromLists ?? previewProduct;
   const productVariants = Array.isArray(product?.variants)
     ? product.variants
     : [];
@@ -236,17 +310,41 @@ function ProductDetail() {
     product?.defaultVariant ??
     productVariants[0] ??
     null;
+  const selectedVariantOptionValues = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(selectedVariant?.optionValues ?? {}).filter(
+          ([key, value]) => normalizeOptionValue(key) && normalizeOptionValue(value),
+        ),
+      ),
+    [selectedVariant],
+  );
   const productAttributeEntries = buildFieldEntries(
     product?.categoryConfig?.productAttributeFields,
     product?.attributes,
   );
-  const variantOptionEntries = buildFieldEntries(
-    product?.categoryConfig?.variantOptionFields,
-    selectedVariant?.optionValues,
-  );
-  const variantAttributeEntries = buildFieldEntries(
-    product?.categoryConfig?.variantAttributeFields,
-    selectedVariant?.attributes,
+  const variantOptionGroups = useMemo(
+    () =>
+      (Array.isArray(product?.categoryConfig?.variantOptionFields)
+        ? product.categoryConfig.variantOptionFields
+        : []
+      )
+        .map((field) => {
+          const values = [
+            ...new Set(
+              productVariants
+                .map((variant) => getVariantOptionValue(variant, field.key))
+                .filter(Boolean),
+            ),
+          ];
+
+          return {
+            ...field,
+            values,
+          };
+        })
+        .filter((field) => field.values.length > 0),
+    [product?.categoryConfig?.variantOptionFields, productVariants],
   );
 
   const relatedProducts = useMemo(
@@ -313,6 +411,9 @@ function ProductDetail() {
 
   const isCustomerAccount = isCustomer && !isVendor;
   const canPurchase = isCustomerAccount;
+  const isFashionProduct = ["fashion-nam", "fashion-nu"].includes(
+    String(product?.category ?? "").trim().toLowerCase(),
+  );
   const vendorShopLabel =
     product?.shopName ||
     product?.vendorName ||
@@ -359,6 +460,40 @@ function ProductDetail() {
     Boolean(product) &&
     !Array.isArray(product?.reviewsData) &&
     (isLoading || (canInspectHiddenProducts && isAdminProductsLoading));
+  const shouldShowProductInformation =
+    productAttributeEntries.length > 0 && !isFashionProduct;
+
+  const handleVariantOptionSelect = useCallback(
+    (fieldKey, fieldValue) => {
+      const normalizedFieldKey = String(fieldKey ?? "").trim();
+      const normalizedFieldValue = normalizeOptionValue(fieldValue);
+
+      if (!normalizedFieldKey || !normalizedFieldValue || productVariants.length === 0) {
+        return;
+      }
+
+      const nextVariant =
+        findBestMatchingVariant(
+          productVariants,
+          selectedVariantOptionValues,
+          normalizedFieldKey,
+          normalizedFieldValue,
+        ) ??
+        selectedVariant ??
+        productVariants[0] ??
+        null;
+
+      if (!nextVariant?.id) {
+        return;
+      }
+
+      setSelectedVariantIdByProduct((previous) => ({
+        ...previous,
+        [id]: nextVariant.id,
+      }));
+    },
+    [id, productVariants, selectedVariant, selectedVariantOptionValues],
+  );
 
   const requireCustomerAccess = () => {
     if (!user) {
@@ -546,7 +681,7 @@ function ProductDetail() {
                 </p>
                 <p className="product-shop-label">Sold by: {vendorShopLabel}</p>
 
-                {productAttributeEntries.length > 0 && (
+                {shouldShowProductInformation && (
                   <div className="product-meta-card">
                     <h3>Product information</h3>
                     <div className="product-meta-list">
@@ -560,64 +695,104 @@ function ProductDetail() {
                   </div>
                 )}
 
-                {productVariants.length > 0 && (
-                  <div className="product-meta-card">
-                    <h3>Variants</h3>
-                    <div className="product-variant-list">
-                      {productVariants.map((variant) => (
-                        <button
-                          key={variant.id}
-                          type="button"
-                          className={`product-variant-chip ${
-                            selectedVariant?.id === variant.id
-                              ? "is-active"
-                              : ""
-                          }`}
-                          onClick={() =>
-                            setSelectedVariantIdByProduct((previous) => ({
-                              ...previous,
-                              [id]: variant.id,
-                            }))
-                          }
-                        >
-                          <span>{variant.label}</span>
-                          <strong>{currency.format(variant.price)}</strong>
-                        </button>
-                      ))}
-                    </div>
+                {productVariants.length > 0 &&
+                  variantOptionGroups.map((group) => {
+                    const isColorGroup = group.key === "color";
+                    const isSizeGroup = isFashionProduct && group.key === "size";
+                    const groupLabel = String(
+                      group.label ?? group.key ?? "Option",
+                    ).trim();
 
-                    {selectedVariant && (
-                      <div className="product-meta-list">
-                        <div className="product-meta-list__item">
-                          <span>Selected variant</span>
-                          <strong>{selectedVariant.label}</strong>
-                        </div>
-                        <div className="product-meta-list__item">
-                          <span>Variant stock</span>
-                          <strong>{activeStock}</strong>
-                        </div>
-                        {variantOptionEntries.map((item) => (
-                          <div
-                            className="product-meta-list__item"
-                            key={item.key}
-                          >
-                            <span>{item.label}</span>
-                            <strong>{item.value}</strong>
+                    return (
+                      <div
+                        className={`option-row ${
+                          isColorGroup ? "option-row--colors" : "option-row--stacked"
+                        }`}
+                        key={group.key}
+                      >
+                        <h3>{groupLabel}:</h3>
+
+                        {isColorGroup ? (
+                          <div className="color-options">
+                            {group.values.map((optionValue) => {
+                              const isActive = selectedColor === optionValue;
+                              const matchedVariant = findBestMatchingVariant(
+                                productVariants,
+                                selectedVariantOptionValues,
+                                group.key,
+                                optionValue,
+                              );
+                              const isAvailable = Boolean(matchedVariant);
+                              const swatchColor = getVariantColorHex(matchedVariant);
+                              const hasColorSwatch = Boolean(swatchColor);
+
+                              return (
+                                <button
+                                  key={optionValue}
+                                  type="button"
+                                  className={hasColorSwatch
+                                    ? `color-option ${isActive ? "is-active" : ""}`
+                                    : `color-option-label ${isActive ? "is-active" : ""}`}
+                                  style={
+                                    hasColorSwatch
+                                      ? { "--swatch-color": swatchColor }
+                                      : undefined
+                                  }
+                                  onClick={() =>
+                                    handleVariantOptionSelect(group.key, optionValue)
+                                  }
+                                  aria-pressed={isActive}
+                                  disabled={!isAvailable}
+                                  title={optionValue}
+                                >
+                                  {hasColorSwatch ? (
+                                    <span className="sr-only">{optionValue}</span>
+                                  ) : (
+                                    optionValue
+                                  )}
+                                </button>
+                              );
+                            })}
                           </div>
-                        ))}
-                        {variantAttributeEntries.map((item) => (
+                        ) : (
                           <div
-                            className="product-meta-list__item"
-                            key={item.key}
+                            className={
+                              isSizeGroup
+                                ? "size-options"
+                                : "variant-option-buttons"
+                            }
                           >
-                            <span>{item.label}</span>
-                            <strong>{item.value}</strong>
+                            {group.values.map((optionValue) => {
+                              const isActive =
+                                selectedVariantOptionValues[group.key] === optionValue;
+                              const matchedVariant = findBestMatchingVariant(
+                                productVariants,
+                                selectedVariantOptionValues,
+                                group.key,
+                                optionValue,
+                              );
+                              const isAvailable = Boolean(matchedVariant);
+
+                              return (
+                                <button
+                                  key={optionValue}
+                                  type="button"
+                                  className={isActive ? "is-active" : ""}
+                                  onClick={() =>
+                                    handleVariantOptionSelect(group.key, optionValue)
+                                  }
+                                  aria-pressed={isActive}
+                                  disabled={!isAvailable}
+                                >
+                                  {optionValue}
+                                </button>
+                              );
+                            })}
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
-                  </div>
-                )}
+                    );
+                  })}
 
                 {productVariants.length === 0 && productColors.length > 0 && (
                   <div className="option-row">
@@ -637,6 +812,7 @@ function ProductDetail() {
                               [id]: colorValue,
                             }))
                           }
+                          title={colorValue}
                         >
                           <span className="sr-only">{colorValue}</span>
                         </button>

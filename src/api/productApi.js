@@ -33,7 +33,7 @@ export const PRODUCT_CATEGORIES = [
 export const PRODUCT_CATEGORY_LABELS = {
   "fashion-nam": "Men Fashion",
   "fashion-nu": "Women Fashion",
-  "do-gia-dung": "Home",
+  "do-gia-dung": "Furniture",
   "dien-tu": "Electronics",
   "thuc-pham": "Food",
   others: "Others",

@@ -5,7 +5,7 @@ function resolveApiBaseUrl(rawBaseUrl) {
   const normalizedBaseUrl = String(rawBaseUrl ?? "").trim();
 
   if (!normalizedBaseUrl) {
-    return "http://localhost:5000";
+    return "https://l-s-ecommerce-luongdieulong-thaiduongson.onrender.com";
   }
 
   const trimmedBaseUrl = normalizedBaseUrl.replace(/\/+$/, "");
@@ -64,9 +64,14 @@ apiClient.interceptors.response.use(
   (error) => {
     const message =
       error?.response?.data?.message || error?.message || "Request failed";
+    const nextError = new Error(message);
+    nextError.status = Number(error?.response?.status ?? 0);
+    nextError.code = error?.code;
+    nextError.response = error?.response;
 
-    return Promise.reject(new Error(message));
+    return Promise.reject(nextError);
   },
 );
 
 export default apiClient;
+
