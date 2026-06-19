@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -348,16 +348,6 @@ function buildGeneratorInputsFromVariants(categoryValue, variants = []) {
     {},
   );
   return { ...optionInputs, ...attributeInputs };
-}
-
-function formatVariantCurrency(value) {
-  const amount = Number(value ?? 0);
-
-  if (!Number.isFinite(amount)) {
-    return "$0";
-  }
-
-  return `$${amount.toLocaleString("en-US")}`;
 }
 
 function hasMeaningfulVariantDraft(variant) {
@@ -792,7 +782,7 @@ export default function VendorProducts() {
     return String(params.get("edit") ?? "").trim();
   }, [location.search]);
 
-  function applyEditingProduct(product) {
+  const applyEditingProduct = useCallback((product) => {
     const productThumbnail = getProductThumbnail(product);
     const productGalleryImages = getProductGalleryImages(product);
     const nextVariantRows =
@@ -863,9 +853,9 @@ export default function VendorProducts() {
     setEditingVariantLocalId("");
     setImagePendingRemoval(null);
     setErrorMessage("");
-  }
+  }, []);
 
-  async function startEditingProduct(product) {
+  const startEditingProduct = useCallback((product) => {
     const normalizedProductId = String(product?.id ?? "").trim();
 
     if (!normalizedProductId) {
@@ -874,7 +864,7 @@ export default function VendorProducts() {
     }
 
     applyEditingProduct(product);
-  }
+  }, [applyEditingProduct]);
 
   useEffect(() => {
     setVariantRows((previous) => {
@@ -906,8 +896,8 @@ export default function VendorProducts() {
       return;
     }
 
-    void startEditingProduct(productToEdit);
-  }, [editProductIdFromQuery, editingId, vendorProducts]);
+    startEditingProduct(productToEdit);
+  }, [editProductIdFromQuery, editingId, startEditingProduct, vendorProducts]);
 
   useEffect(() => {
     const resolvedTotalPages = Math.max(totalPages, 1);
@@ -944,7 +934,7 @@ export default function VendorProducts() {
     }
   }
 
-  function handleInlineVariantOptionChange(localId, optionKey, nextValue) {
+  function _handleInlineVariantOptionChange(localId, optionKey, nextValue) {
     const updatedRows = (Array.isArray(variantRows) ? variantRows : []).map(
       (variant) => {
         if (String(variant.localId) !== String(localId)) {
@@ -985,68 +975,7 @@ export default function VendorProducts() {
     }
   }
 
-  function getVariantImageInputId(localId) {
-    return `variant-image-file-${String(localId)}`;
-  }
-
-  const [invalidImageUrlByLocalId, setInvalidImageUrlByLocalId] = useState({});
-
-  async function headCheck(url) {
-    try {
-      const response = await fetch(url, { method: "HEAD" });
-      if (!response.ok) return false;
-      const contentType = response.headers.get("content-type") || "";
-      return contentType.includes("image");
-    } catch (_) {
-      return false;
-    }
-  }
-
-  function imageLoadCheck(url) {
-    return new Promise((resolve) => {
-      try {
-        const img = new Image();
-        img.onload = () => resolve(true);
-        img.onerror = () => resolve(false);
-        img.src = url;
-      } catch (_) {
-        resolve(false);
-      }
-    });
-  }
-
-  async function validateVariantImageUrl(localId, url) {
-    const value = String(url ?? "").trim();
-
-    if (!value) {
-      setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: false }));
-      return;
-    }
-
-    const looksLikeUrl = /^(https?:)?\/\//i.test(value) || value.startsWith("data:");
-
-    if (!looksLikeUrl) {
-      setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: true }));
-      return;
-    }
-
-    if (value.startsWith("data:")) {
-      setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: false }));
-      return;
-    }
-
-    const ok = (await headCheck(value)) || (await imageLoadCheck(value));
-    setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: !ok }));
-  }
-
-  function requestUploadVariantImage(localId) {
-    const input = document.getElementById(getVariantImageInputId(localId));
-    if (input) {
-      input.click();
-    }
-  }
-
-  function handleVariantImageFileSelected(localId, event) {
+  function _handleVariantImageFileSelected(localId, event) {
     const file = event?.target?.files?.[0] ?? null;
     event.target.value = "";
 
@@ -1069,7 +998,6 @@ export default function VendorProducts() {
     reader.onload = () => {
       const dataUrl = String(reader.result || "");
       handleInlineVariantChange(localId, "image", dataUrl);
-      setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: false }));
     };
     reader.onerror = () => {
       setErrorMessage("Không thể đọc file ảnh. Vui lòng thử lại.");
@@ -1886,7 +1814,7 @@ export default function VendorProducts() {
       let updatedProduct = null;
 
       if (action === "edit") {
-        await startEditingProduct(product);
+        startEditingProduct(product);
         return;
       }
 
@@ -2520,15 +2448,6 @@ export default function VendorProducts() {
                         form.title,
                         variant,
                         index,
-                      );
-                      const variantPrice = Number(
-                        String(variant.price ?? "").trim() || form.price || 0,
-                      );
-                      const variantOldPrice = Number(
-                        String(variant.oldPrice ?? "").trim() ||
-                          variant.price ||
-                          form.price ||
-                          0,
                       );
                       const variantStock = Number(
                         String(variant.stock ?? "").trim() || 0,

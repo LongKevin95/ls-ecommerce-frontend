@@ -296,9 +296,10 @@ function ProductDetail() {
   });
 
   const product = detailProduct ?? resolvedProductFromLists ?? previewProduct;
-  const productVariants = Array.isArray(product?.variants)
-    ? product.variants
-    : [];
+  const productVariants = useMemo(
+    () => (Array.isArray(product?.variants) ? product.variants : []),
+    [product?.variants],
+  );
   const selectedVariantId =
     selectedVariantIdByProduct[id] ??
     product?.defaultVariantId ??
