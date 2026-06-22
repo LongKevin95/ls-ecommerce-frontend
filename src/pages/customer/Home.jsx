@@ -4,20 +4,44 @@ import jblSpeaker from "../../assets/Images/jbl-speaker.png";
 
 import ProductCard from "../../components/ProductCard";
 import { formatProductCategoryLabel } from "../../api/productApi";
+import { useFlashSaleQuery } from "../../hooks/useFlashSaleQuery";
 import { useProductsQuery } from "../../hooks/useProductsQuery";
 import { useUsersQuery } from "../../hooks/useUsersQuery";
+import {
+  isFlashSaleCampaignLive,
+  isProductInCurrentFlashSale,
+} from "../../utils/flashSalePricing";
 import "./Home.css";
-
-const timerItems = [
-  { label: "Days", value: "03" },
-  { label: "Hours", value: "23" },
-  { label: "Minutes", value: "59" },
-  { label: "Seconds", value: "59" },
-];
 const HOME_PRODUCTS_SNAPSHOT_KEY = "ls-home-products-snapshot";
 const HOME_USERS_SNAPSHOT_KEY = "ls-home-users-snapshot";
 const HOME_HERO_PRODUCT_ID_KEY = "ls-home-hero-product-id";
 const HERO_BANNER_PRODUCT_TITLE = "Iphone 17 Pro Max 256GB";
+
+function formatCountdownValue(value) {
+  return String(Math.max(0, Number(value) || 0)).padStart(2, "0");
+}
+
+function buildFlashSaleTimerItems(endsAt, nowTimestamp) {
+  const endsAtTimestamp = Date.parse(String(endsAt ?? "").trim());
+
+  if (!Number.isFinite(endsAtTimestamp)) {
+    return [];
+  }
+
+  const diff = Math.max(0, endsAtTimestamp - nowTimestamp);
+  const totalSeconds = Math.floor(diff / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return [
+    { label: "Days", value: formatCountdownValue(days) },
+    { label: "Hours", value: formatCountdownValue(hours) },
+    { label: "Minutes", value: formatCountdownValue(minutes) },
+    { label: "Seconds", value: formatCountdownValue(seconds) },
+  ];
+}
 
 function readStoredArray(storageKey) {
   if (typeof window === "undefined") {
@@ -134,9 +158,15 @@ function Home() {
   const [storedHeroProductId] = useState(() =>
     readStoredValue(HOME_HERO_PRODUCT_ID_KEY),
   );
+  const [countdownNow, setCountdownNow] = useState(() => Date.now());
 
   const { data: productsData, isLoading, isError, error } = useProductsQuery();
   const { data: usersData } = useUsersQuery();
+  const { data: flashSaleState } = useFlashSaleQuery();
+  const isFlashSaleLive = useMemo(
+    () => isFlashSaleCampaignLive(flashSaleState, countdownNow),
+    [countdownNow, flashSaleState],
+  );
 
   useEffect(() => {
     if (!Array.isArray(productsData)) {
@@ -153,6 +183,18 @@ function Home() {
 
     writeStoredArray(HOME_USERS_SNAPSHOT_KEY, usersData);
   }, [usersData]);
+
+  useEffect(() => {
+    if (!isFlashSaleLive || !flashSaleState?.endsAt) {
+      return undefined;
+    }
+
+    const timerId = window.setInterval(() => {
+      setCountdownNow(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(timerId);
+  }, [flashSaleState?.endsAt, isFlashSaleLive]);
 
   const products = Array.isArray(productsData) ? productsData : storedProducts;
   const users = Array.isArray(usersData) ? usersData : storedUsers;
@@ -288,9 +330,40 @@ function Home() {
 
   const heroBannerProductLink = getProductDetailLink(heroBannerProduct);
 
-  const flashSalesProducts = filteredProducts.slice(0, 8);
-  const bestSellingProducts = filteredProducts.slice(0, 4);
+  const flashSalesProducts = useMemo(
+    () =>
+      filteredProducts
+        .filter((product) =>
+          isProductInCurrentFlashSale(product, flashSaleState, countdownNow),
+        )
+        .slice(0, 8),
+    [countdownNow, filteredProducts, flashSaleState],
+  );
+  const bestSellingProducts = useMemo(
+    () =>
+      [...filteredProducts]
+        .sort((firstProduct, secondProduct) => {
+          const soldCountDiff =
+            Number(secondProduct?.soldCount ?? 0) -
+            Number(firstProduct?.soldCount ?? 0);
+
+          if (soldCountDiff !== 0) {
+            return soldCountDiff;
+          }
+
+          return Number(secondProduct?.reviews ?? 0) - Number(firstProduct?.reviews ?? 0);
+        })
+        .slice(0, 4),
+    [filteredProducts],
+  );
   const exploreProducts = filteredProducts.slice(0, 8);
+  const flashSaleTimerItems = useMemo(
+    () =>
+      isFlashSaleLive
+        ? buildFlashSaleTimerItems(flashSaleState?.endsAt, countdownNow)
+        : [],
+    [countdownNow, flashSaleState?.endsAt, isFlashSaleLive],
+  );
 
   const searchSummary = useMemo(() => {
     if (!keyword && !category) return "";
@@ -331,7 +404,11 @@ function Home() {
         }`}
       >
         {items.map((product) => (
-          <ProductCard key={product.id} product={product} />
+          <ProductCard
+            key={product.id}
+            product={product}
+            flashSaleState={flashSaleState}
+          />
         ))}
         {Array.from({ length: skeletonCount }).map((_, index) => (
           <div
@@ -376,39 +453,41 @@ function Home() {
         <p className="home-search-summary">Filtering by: {searchSummary}</p>
       )}
 
-      <section className="home-section">
-        <div className="section-title-row">
-          <div>
-            <p className="section-subtitle">Today's</p>
-            <h2 className="section-title">Flash Sales</h2>
-          </div>
+      {isFlashSaleLive && flashSalesProducts.length > 0 && (
+        <section className="home-section">
+          <div className="section-title-row">
+            <div>
+              <p className="section-subtitle">Today's</p>
+              <h2 className="section-title">Flash Sales</h2>
+            </div>
 
-          <div className="sale-timer" aria-label="Countdown">
-            {timerItems.map((item, index) => (
-              <div className="sale-timer__group" key={item.label}>
-                <div className="sale-timer__item">
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
+            <div className="sale-timer" aria-label="Countdown">
+              {flashSaleTimerItems.map((item, index) => (
+                <div className="sale-timer__group" key={item.label}>
+                  <div className="sale-timer__item">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </div>
+
+                  {index < flashSaleTimerItems.length - 1 && (
+                    <span className="sale-timer__separator" aria-hidden="true">
+                      :
+                    </span>
+                  )}
                 </div>
-
-                {index < timerItems.length - 1 && (
-                  <span className="sale-timer__separator" aria-hidden="true">
-                    :
-                  </span>
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
 
-        {renderProductGrid(flashSalesProducts, 8)}
+          {renderProductGrid(flashSalesProducts, 8)}
 
-        <div className="section-actions">
-          <button type="button" className="btn-view-all">
-            View All Products
-          </button>
-        </div>
-      </section>
+          <div className="section-actions">
+            <button type="button" className="btn-view-all">
+              View All Products
+            </button>
+          </div>
+        </section>
+      )}
 
       <section className="home-section">
         <div className="section-title-row">

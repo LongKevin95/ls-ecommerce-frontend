@@ -1,7 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
+import { updateFlashSaleState } from "../../api/flashSaleApi";
 import { USERS_QUERY_SCOPE } from "../../api/usersApi";
 import { useAdminProductsQuery } from "../../hooks/useAdminProductsQuery";
+import { useFlashSaleQuery } from "../../hooks/useFlashSaleQuery";
 import { useOrdersQuery } from "../../hooks/useOrdersQuery";
 import { useUsersQuery } from "../../hooks/useUsersQuery";
 import "./Dashboard.css";
@@ -25,13 +28,49 @@ function createEmptyVendorStats(vendorEmail, vendorName = "Vendor") {
   };
 }
 
+function formatDateTimeLocal(value) {
+  const timestamp = Date.parse(String(value ?? "").trim());
+
+  if (!Number.isFinite(timestamp)) {
+    return "";
+  }
+
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 export default function Dashboard() {
+  const queryClient = useQueryClient();
   const { data: users = [] } = useUsersQuery({
     scope: USERS_QUERY_SCOPE.ADMIN,
   });
   const { data: products = [] } = useAdminProductsQuery();
   const { data: orders = [] } = useOrdersQuery();
+  const { data: flashSaleState } = useFlashSaleQuery();
   const [selectedVendorEmail, setSelectedVendorEmail] = useState("");
+  const [flashSaleForm, setFlashSaleForm] = useState({
+    startsAt: "",
+    endsAt: "",
+  });
+  const [isSavingFlashSale, setIsSavingFlashSale] = useState(false);
+  const isCampaignWindowOpen = Boolean(
+    flashSaleState?.isEnabled &&
+      String(flashSaleState?.currentCampaignId ?? "").trim() &&
+      Date.parse(String(flashSaleState?.endsAt ?? "").trim()) > Date.now(),
+  );
+
+  useEffect(() => {
+    setFlashSaleForm({
+      startsAt: formatDateTimeLocal(flashSaleState?.startsAt),
+      endsAt: formatDateTimeLocal(flashSaleState?.endsAt),
+    });
+  }, [flashSaleState?.endsAt, flashSaleState?.startsAt]);
 
   const vendorUsers = useMemo(() => {
     return users.filter((user) => {
@@ -178,6 +217,83 @@ export default function Dashboard() {
     };
   }, [products, vendorStats, vendorUsers.length]);
 
+  const currentCampaignProducts = useMemo(() => {
+    if (!isCampaignWindowOpen) {
+      return [];
+    }
+
+    return [...products]
+      .filter(
+        (product) =>
+          String(product?.flashSaleCampaignId ?? "").trim() ===
+            String(flashSaleState.currentCampaignId ?? "").trim() &&
+          Number(product?.flashSaleDiscountPercent ?? 0) > 0,
+      )
+      .sort(
+        (firstProduct, secondProduct) =>
+          Number(secondProduct?.flashSaleDiscountPercent ?? 0) -
+          Number(firstProduct?.flashSaleDiscountPercent ?? 0),
+      );
+  }, [
+        flashSaleState?.currentCampaignId,
+        isCampaignWindowOpen,
+        products,
+  ]);
+
+  const handleFlashSaleFieldChange = (event) => {
+    const { name, value } = event.target;
+
+    setFlashSaleForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const handleOpenFlashSale = async () => {
+    if (!flashSaleForm.startsAt || !flashSaleForm.endsAt) {
+      window.alert("Please choose both start and end time for the flash sale.");
+      return;
+    }
+
+    setIsSavingFlashSale(true);
+
+    try {
+      await updateFlashSaleState({
+        isEnabled: true,
+        startsAt: new Date(flashSaleForm.startsAt).toISOString(),
+        endsAt: new Date(flashSaleForm.endsAt).toISOString(),
+      });
+
+      await Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: ["flash-sale"] }),
+        queryClient.invalidateQueries({ queryKey: ["products", "admin"] }),
+        queryClient.invalidateQueries({ queryKey: ["products", "public"] }),
+      ]);
+    } catch (error) {
+      window.alert(error?.message ?? "Unable to update flash sale campaign.");
+    } finally {
+      setIsSavingFlashSale(false);
+    }
+  };
+
+  const handleCloseFlashSale = async () => {
+    setIsSavingFlashSale(true);
+
+    try {
+      await updateFlashSaleState({ isEnabled: false });
+
+      await Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: ["flash-sale"] }),
+        queryClient.invalidateQueries({ queryKey: ["products", "admin"] }),
+        queryClient.invalidateQueries({ queryKey: ["products", "public"] }),
+      ]);
+    } catch (error) {
+      window.alert(error?.message ?? "Unable to close flash sale campaign.");
+    } finally {
+      setIsSavingFlashSale(false);
+    }
+  };
+
   return (
     <div className="admin-dashboard">
       <section className="admin-dashboard__metrics">
@@ -197,6 +313,95 @@ export default function Dashboard() {
           <p>Out of stock</p>
           <h3>{stats.outOfStock}</h3>
         </article>
+      </section>
+
+      <section className="admin-dashboard__flash-sale">
+        <div className="admin-dashboard__shops-header">
+          <div>
+            <h2>Flash sale control</h2>
+            <span>
+              {flashSaleState?.isActive
+                ? "Campaign is live on customer storefront."
+                : isCampaignWindowOpen
+                  ? "Campaign is open for vendor enrollment."
+                  : flashSaleState?.isEnabled
+                    ? "Campaign ended. Open a new round to collect new products."
+                  : "Campaign is currently closed."}
+            </span>
+          </div>
+        </div>
+
+        <div className="admin-dashboard__flash-sale-grid">
+          <label>
+            Start time
+            <input
+              type="datetime-local"
+              name="startsAt"
+              value={flashSaleForm.startsAt}
+              onChange={handleFlashSaleFieldChange}
+            />
+          </label>
+
+          <label>
+            End time
+            <input
+              type="datetime-local"
+              name="endsAt"
+              value={flashSaleForm.endsAt}
+              onChange={handleFlashSaleFieldChange}
+            />
+          </label>
+        </div>
+
+        <div className="admin-dashboard__flash-sale-actions">
+          <button
+            type="button"
+            onClick={handleOpenFlashSale}
+            disabled={isSavingFlashSale}
+          >
+            {isSavingFlashSale ? "Saving..." : "Open new flash sale"}
+          </button>
+          <button
+            type="button"
+            className="admin-dashboard__ghost-button"
+            onClick={handleCloseFlashSale}
+            disabled={isSavingFlashSale || !flashSaleState?.isEnabled}
+          >
+            Close flash sale
+          </button>
+        </div>
+
+        {isCampaignWindowOpen && currentCampaignProducts.length > 0 && (
+          <div className="admin-dashboard__flash-products">
+            <div className="admin-dashboard__flash-products-header">
+              <strong>Products enrolled in current campaign</strong>
+              <span>{currentCampaignProducts.length} items</span>
+            </div>
+
+            <div className="admin-dashboard__flash-products-table">
+              <div className="admin-dashboard__flash-products-row admin-dashboard__flash-products-row--head">
+                <span>Product</span>
+                <span>Shop</span>
+                <span>Regular price</span>
+                <span>Flash price</span>
+                <span>Discount</span>
+              </div>
+
+              {currentCampaignProducts.map((product) => (
+                <div
+                  className="admin-dashboard__flash-products-row"
+                  key={product.id}
+                >
+                  <span>{product.title}</span>
+                  <span>{product.shopName || "Shop"}</span>
+                  <span>{currency.format(product.regularPrice ?? product.price ?? 0)}</span>
+                  <span>{currency.format(product.displayPrice ?? product.price ?? 0)}</span>
+                  <span>-{Number(product.flashSaleDiscountPercent ?? 0)}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="admin-dashboard__shops">

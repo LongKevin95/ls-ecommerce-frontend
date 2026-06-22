@@ -92,6 +92,8 @@ export function buildProductFormData(payload = {}) {
     "oldPrice",
     "stock",
     "thumbnail",
+    "flashSaleEnabled",
+    "flashSaleDiscountPercent",
     "status",
   ].forEach((key) => {
     if (hasOwnValue(payload, key)) {

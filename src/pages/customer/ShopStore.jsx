@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import ProductCard from "../../components/ProductCard";
+import { useFlashSaleQuery } from "../../hooks/useFlashSaleQuery";
 import { useShopsQuery } from "../../hooks/useShopsQuery";
 import { useProductsQuery } from "../../hooks/useProductsQuery";
 import "./Shop.css";
@@ -10,6 +11,7 @@ export default function ShopStore() {
   const { vendorKey } = useParams();
   const { data: shops = [] } = useShopsQuery();
   const { data: products = [] } = useProductsQuery();
+  const { data: flashSaleState } = useFlashSaleQuery();
 
   const decodedShopId = decodeURIComponent(String(vendorKey ?? "")).trim();
 
@@ -81,7 +83,11 @@ export default function ShopStore() {
       ) : (
         <section className="related-grid">
           {vendorProducts.map((product) => (
-            <ProductCard key={product.id} product={product} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              flashSaleState={flashSaleState}
+            />
           ))}
         </section>
       )}

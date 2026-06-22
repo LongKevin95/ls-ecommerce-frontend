@@ -62,6 +62,28 @@ function normalizeWishlistProduct(product) {
     title: String(product?.title ?? "Product"),
     price: Number(product?.price ?? 0),
     oldPrice: Number(product?.oldPrice ?? 0),
+    regularPrice: Number(product?.regularPrice ?? product?.price ?? 0),
+    regularOldPrice: Number(
+      product?.regularOldPrice ?? product?.oldPrice ?? product?.price ?? 0,
+    ),
+    regularDiscountPercentage: Number(
+      product?.regularDiscountPercentage ?? 0,
+    ),
+    displayPrice: Number(product?.displayPrice ?? product?.price ?? 0),
+    displayOldPrice: Number(
+      product?.displayOldPrice ?? product?.oldPrice ?? product?.price ?? 0,
+    ),
+    displayDiscountPercentage: Number(
+      product?.displayDiscountPercentage ?? product?.discountPercentage ?? 0,
+    ),
+    discountPercentage: Number(product?.discountPercentage ?? 0),
+    flashSaleDiscountPercent: Number(
+      product?.flashSaleDiscountPercent ?? product?.flashSale?.discountPercent ?? 0,
+    ),
+    flashSaleCampaignId: String(
+      product?.flashSaleCampaignId ?? product?.flashSale?.campaignId ?? "",
+    ).trim(),
+    isFlashSaleActive: Boolean(product?.isFlashSaleActive),
     image:
       product?.image ||
       (Array.isArray(product?.images) ? product.images[0] : "") ||
@@ -99,6 +121,16 @@ function normalizeWishlistApiItem(item) {
       title: "Product",
       price: 0,
       oldPrice: 0,
+      regularPrice: 0,
+      regularOldPrice: 0,
+      regularDiscountPercentage: 0,
+      displayPrice: 0,
+      displayOldPrice: 0,
+      displayDiscountPercentage: 0,
+      discountPercentage: 0,
+      flashSaleDiscountPercent: 0,
+      flashSaleCampaignId: "",
+      isFlashSaleActive: false,
       image: "/favicon.svg",
       rating: 0,
       reviews: 0,

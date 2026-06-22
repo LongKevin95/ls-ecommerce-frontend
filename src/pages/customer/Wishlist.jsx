@@ -1,15 +1,17 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useMemo } from "react";
 
+import { useFlashSaleQuery } from "../../hooks/useFlashSaleQuery";
 import { useAuth } from "../../hooks/useAuth";
 import { useCart } from "../../hooks/useCart";
 import { useUsersQuery } from "../../hooks/useUsersQuery";
+import { resolveProductPriceState } from "../../utils/flashSalePricing";
 import { useWishlist } from "../../hooks/useWishlist";
 import "./Wishlist.css";
 
-const currency = new Intl.NumberFormat("en-US", {
+const currency = new Intl.NumberFormat("vi-VN", {
   style: "currency",
-  currency: "USD",
+  currency: "VND",
   maximumFractionDigits: 0,
 });
 
@@ -17,6 +19,7 @@ export default function Wishlist() {
   const navigate = useNavigate();
   const { user, isCustomer, isVendor } = useAuth();
   const { data: users = [] } = useUsersQuery();
+  const { data: flashSaleState } = useFlashSaleQuery();
   const { addToCart } = useCart();
   const { items, removeFromWishlist, clearWishlist } = useWishlist();
   const canUseWishlist = isCustomer && !isVendor;
@@ -78,17 +81,21 @@ export default function Wishlist() {
       return;
     }
 
+    const priceState = resolveProductPriceState(item, flashSaleState);
+
     addToCart(
       {
         id: item.productId,
         title: item.title,
         price: item.price,
+        displayPrice: priceState.currentPrice,
         image: item.image,
         vendorEmail: item.vendorEmail,
         shopName: item.shopName,
       },
       1,
       {
+        price: priceState.currentPrice,
         color: "Default",
         size: "M",
       },
@@ -126,22 +133,40 @@ export default function Wishlist() {
       </nav>
 
       <div className="wishlist-header">
-        <h1>Your Wishlist</h1>
-        {enrichedItems.length > 0 && (
-          <button
-            type="button"
-            className="wishlist-clear-btn"
-            onClick={handleClearWishlist}
-          >
-            Clear all
-          </button>
-        )}
+        <div className="wishlist-header__copy">
+          <p>Wishlist</p>
+          <h1>Sản phẩm bạn đã lưu</h1>
+          <span>
+            Theo dõi nhanh các món muốn mua lại hoặc chuyển thẳng vào giỏ hàng.
+          </span>
+        </div>
+
+        <div className="wishlist-header__actions">
+          <div className="wishlist-header__stat">
+            <strong>{enrichedItems.length}</strong>
+            <span>sản phẩm</span>
+          </div>
+
+          {enrichedItems.length > 0 && (
+            <button
+              type="button"
+              className="wishlist-clear-btn"
+              onClick={handleClearWishlist}
+            >
+              Xóa tất cả
+            </button>
+          )}
+        </div>
       </div>
 
       {enrichedItems.length === 0 ? (
         <div className="wishlist-empty">
-          <p>Your wishlist is empty.</p>
-          <Link to="/">Continue shopping</Link>
+          <div className="wishlist-empty__icon" aria-hidden="true">
+            ♥
+          </div>
+          <h2>Wishlist của bạn đang trống</h2>
+          <p>Lưu sản phẩm bạn thích để xem lại nhanh hơn khi cần.</p>
+          <Link to="/">Tiếp tục mua sắm</Link>
         </div>
       ) : (
         <section className="wishlist-grid">
@@ -175,21 +200,32 @@ export default function Wishlist() {
                   </span>
                   Shop: {item.shopName}
                 </p>
-                <strong>{currency.format(item.price)}</strong>
-                <button
-                  type="button"
-                  className="wishlist-card__move"
-                  onClick={() => handleMoveToCart(item)}
-                >
-                  Move to cart
-                </button>
-                <button
-                  type="button"
-                  className="wishlist-card__remove"
-                  onClick={() => handleRemoveWishlistItem(item.productId)}
-                >
-                  Remove
-                </button>
+                <div className="wishlist-card__footer">
+                  <strong>
+                    {currency.format(
+                      Number(
+                        resolveProductPriceState(item, flashSaleState)
+                          .currentPrice ?? 0,
+                      ),
+                    )}
+                  </strong>
+                  <div className="wishlist-card__actions">
+                    <button
+                      type="button"
+                      className="wishlist-card__move"
+                      onClick={() => handleMoveToCart(item)}
+                    >
+                      Chuyển vào giỏ
+                    </button>
+                    <button
+                      type="button"
+                      className="wishlist-card__remove"
+                      onClick={() => handleRemoveWishlistItem(item.productId)}
+                    >
+                      Xóa
+                    </button>
+                  </div>
+                </div>
               </div>
             </article>
           ))}

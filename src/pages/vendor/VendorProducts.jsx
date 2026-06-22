@@ -10,6 +10,7 @@ import {
 } from "../../api/productApi";
 import { useAdminProductsQuery } from "../../hooks/useAdminProductsQuery";
 import { useAuth } from "../../hooks/useAuth";
+import { useFlashSaleQuery } from "../../hooks/useFlashSaleQuery";
 import { isProductOwnedByVendor } from "./vendorDataUtils";
 import "./VendorProducts.css";
 
@@ -19,6 +20,8 @@ const defaultForm = {
   description: "",
   price: "",
   stock: "",
+  flashSaleEnabled: false,
+  flashSaleDiscountPercent: "",
   colorsText: "",
   sizesText: "",
   brand: "",
@@ -615,6 +618,7 @@ export default function VendorProducts() {
   const location = useLocation();
   const { user } = useAuth();
   const { data: products = [], isLoading, isError } = useAdminProductsQuery();
+  const { data: flashSaleState } = useFlashSaleQuery();
 
   const [form, setForm] = useState(defaultForm);
   const [existingThumbnail, setExistingThumbnail] = useState("");
@@ -646,6 +650,11 @@ export default function VendorProducts() {
     user?.shopName ||
     user?.name ||
     (vendorEmail ? vendorEmail.split("@")[0] : "My Shop");
+  const isFlashSaleCampaignOpen = Boolean(
+    flashSaleState?.isEnabled &&
+      String(flashSaleState?.currentCampaignId ?? "").trim() &&
+      Date.parse(String(flashSaleState?.endsAt ?? "").trim()) > Date.now(),
+  );
 
   const vendorProducts = useMemo(() => {
     return [...products]
@@ -658,6 +667,23 @@ export default function VendorProducts() {
           getProductCreatedTimestamp(firstProduct),
       );
   }, [products, vendorEmail, vendorId]);
+
+  const currentFlashSaleProducts = useMemo(() => {
+    if (!isFlashSaleCampaignOpen) {
+      return [];
+    }
+
+    return vendorProducts.filter(
+      (product) =>
+        String(product?.flashSaleCampaignId ?? "").trim() ===
+          String(flashSaleState?.currentCampaignId ?? "").trim() &&
+        Number(product?.flashSaleDiscountPercent ?? 0) > 0,
+    );
+  }, [
+    flashSaleState?.currentCampaignId,
+    isFlashSaleCampaignOpen,
+    vendorProducts,
+  ]);
 
   const paginatedVendorProducts = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -817,6 +843,16 @@ export default function VendorProducts() {
       description: product.description ?? "",
       price: String(product.price ?? ""),
       stock: String(product.stock ?? 0),
+      flashSaleEnabled:
+        isFlashSaleCampaignOpen &&
+        String(product?.flashSaleCampaignId ?? "").trim() ===
+          String(flashSaleState?.currentCampaignId ?? "").trim(),
+      flashSaleDiscountPercent:
+        isFlashSaleCampaignOpen &&
+        String(product?.flashSaleCampaignId ?? "").trim() ===
+          String(flashSaleState?.currentCampaignId ?? "").trim()
+          ? String(product?.flashSaleDiscountPercent ?? "")
+          : "",
       colorsText: Array.isArray(product.colors)
         ? product.colors.join(", ")
         : "",
@@ -853,7 +889,7 @@ export default function VendorProducts() {
     setEditingVariantLocalId("");
     setImagePendingRemoval(null);
     setErrorMessage("");
-  }, []);
+  }, [flashSaleState?.currentCampaignId, isFlashSaleCampaignOpen]);
 
   const startEditingProduct = useCallback((product) => {
     const normalizedProductId = String(product?.id ?? "").trim();
@@ -1678,6 +1714,12 @@ export default function VendorProducts() {
         normalizedVariants.length > 0
           ? normalizedVariants.reduce((sum, variant) => sum + variant.stock, 0)
           : stock;
+      const wantsFlashSale = Boolean(form.flashSaleEnabled);
+      const flashSaleDiscountPercent = String(
+        form.flashSaleDiscountPercent ?? "",
+      ).trim()
+        ? Math.round(Number(form.flashSaleDiscountPercent))
+        : 0;
 
       if (
         targetStatus === PRODUCT_STATUS.PENDING &&
@@ -1687,6 +1729,35 @@ export default function VendorProducts() {
       ) {
         setErrorMessage("Danh muc fashion can nhap it nhat 1 size.");
         return;
+      }
+
+      if (wantsFlashSale) {
+        if (!isFlashSaleCampaignOpen) {
+          setErrorMessage(
+            "Flash sale campaign chua duoc admin mo cho dot hien tai.",
+          );
+          return;
+        }
+
+        if (
+          !Number.isFinite(flashSaleDiscountPercent) ||
+          flashSaleDiscountPercent < 1 ||
+          flashSaleDiscountPercent > 95
+        ) {
+          setErrorMessage("Flash sale discount phai trong khoang 1-95%.");
+          return;
+        }
+
+        const flashBasePrice = Math.max(resolvedOldPrice, resolvedPrice);
+        const flashDisplayPrice =
+          flashBasePrice * ((100 - flashSaleDiscountPercent) / 100);
+
+        if (flashDisplayPrice >= resolvedPrice) {
+          setErrorMessage(
+            "Gia flash sale phai nho hon gia ban thong thuong hien tai.",
+          );
+          return;
+        }
       }
 
       const attributes = {};
@@ -1736,6 +1807,8 @@ export default function VendorProducts() {
         vendorEmail,
         shopName: vendorShopName,
         attributes,
+        flashSaleEnabled: wantsFlashSale,
+        flashSaleDiscountPercent,
         status: targetStatus,
       };
 
@@ -1888,6 +1961,79 @@ export default function VendorProducts() {
 
   return (
     <div className={`vendor-products-page ${isSaving ? "is-saving" : ""}`}>
+      {isFlashSaleCampaignOpen && (
+        <section className="vendor-products-card">
+          <div className="vendor-products-flashsale-header">
+            <div>
+              <h2>Flash sale dashboard</h2>
+              <p>
+                Products added to the current campaign will appear here until the
+                campaign closes.
+              </p>
+            </div>
+            <span>{currentFlashSaleProducts.length} products</span>
+          </div>
+
+          {currentFlashSaleProducts.length === 0 ? (
+            <p className="vendor-products-empty">
+              Ban chua them san pham nao vao flash sale dot hien tai.
+            </p>
+          ) : (
+            <div className="vendor-products-table vendor-products-table--flash">
+              <div className="vendor-products-table__row vendor-products-table__head">
+                <span>#</span>
+                <span>Item</span>
+                <span>Regular</span>
+                <span>Flash</span>
+                <span>Discount</span>
+                <span>Sold</span>
+                <span>Status</span>
+                <span>Reason</span>
+                <span>Action</span>
+              </div>
+
+              {currentFlashSaleProducts.map((product, index) => (
+                <div className="vendor-products-table__row" key={`flash-${product.id}`}>
+                  <span>{index + 1}</span>
+                  <span>
+                    <Link to={`/product/${product.id}`} state={{ product }}>
+                      {product.title}
+                    </Link>
+                  </span>
+                  <span>${Number(product.regularPrice ?? product.price ?? 0)}</span>
+                  <span>${Number(product.displayPrice ?? product.price ?? 0)}</span>
+                  <span>-{Number(product.flashSaleDiscountPercent ?? 0)}%</span>
+                  <span>{Number(product.soldCount ?? 0)}</span>
+                  <span>
+                    <span
+                      className={`vendor-status-pill vendor-status-pill--${String(
+                        product.status,
+                      ).replaceAll("_", "-")}`}
+                    >
+                      {formatStatus(product.status)}
+                    </span>
+                  </span>
+                  <span className="vendor-reason-text">
+                    {product.reason ? String(product.reason) : "-"}
+                  </span>
+                  <span>
+                    <button
+                      type="button"
+                      className="vendor-action-btn vendor-action-btn--icon vendor-action-btn--edit"
+                      disabled={isSaving}
+                      onClick={() => startEditingProduct(product)}
+                      title="Edit"
+                      aria-label="Edit product"
+                    >
+                      <EditIcon />
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
       <section className="vendor-products-card">
         <h2>{editingId ? "Cập nhật sản phẩm" : "Đăng sản phẩm mới"}</h2>
         <form onSubmit={handleSubmit}>
@@ -1952,6 +2098,41 @@ export default function VendorProducts() {
                       onChange={handleInputChange}
                     />
                   </label>
+
+                  {isFlashSaleCampaignOpen && (
+                    <div className="vendor-products-flashsale is-full">
+                      <label className="vendor-products-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(form.flashSaleEnabled)}
+                          onChange={(event) =>
+                            setForm((previous) => ({
+                              ...previous,
+                              flashSaleEnabled: event.target.checked,
+                              flashSaleDiscountPercent: event.target.checked
+                                ? previous.flashSaleDiscountPercent
+                                : "",
+                            }))
+                          }
+                        />
+                        <span>Add this product to current flash sale campaign</span>
+                      </label>
+
+                      {form.flashSaleEnabled && (
+                        <label>
+                          Flash sale discount (%)
+                          <input
+                            name="flashSaleDiscountPercent"
+                            type="number"
+                            min="1"
+                            max="95"
+                            value={form.flashSaleDiscountPercent}
+                            onChange={handleInputChange}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
 
                   <label className="is-full">
                     <div>Upload thumbnail</div>
@@ -2622,6 +2803,8 @@ export default function VendorProducts() {
               <span>#</span>
               <span>Item</span>
               <span>Price</span>
+              <span>Sold</span>
+              <span>Flash</span>
               <span>Stock</span>
               <span>Status</span>
               <span>Reason</span>
@@ -2644,6 +2827,10 @@ export default function VendorProducts() {
                 String(product?.status ?? "")
                   .trim()
                   .toLowerCase() === PRODUCT_STATUS.DRAFT;
+              const isEnrolledInCurrentFlashSale =
+                String(product?.flashSaleCampaignId ?? "").trim() ===
+                  String(flashSaleState?.currentCampaignId ?? "").trim() &&
+                Number(product?.flashSaleDiscountPercent ?? 0) > 0;
 
               return (
                 <div className="vendor-products-table__row" key={product.id}>
@@ -2654,6 +2841,12 @@ export default function VendorProducts() {
                     </Link>
                   </span>
                   <span>${Number(product.price ?? 0)}</span>
+                  <span>{Number(product.soldCount ?? 0)}</span>
+                  <span>
+                    {isEnrolledInCurrentFlashSale
+                      ? `-${Number(product.flashSaleDiscountPercent ?? 0)}%`
+                      : "-"}
+                  </span>
                   <span>{product.stock ?? 0}</span>
                   <span>
                     <span

@@ -112,6 +112,24 @@ function normalizeEmail(value) {
     .toLowerCase();
 }
 
+function normalizeCurrencyNumber(value, fallback = 0) {
+  const nextValue = Number(value ?? fallback);
+  return Number.isFinite(nextValue) && nextValue >= 0 ? nextValue : fallback;
+}
+
+function computeDiscountPercentage(oldPrice, price) {
+  const normalizedOldPrice = normalizeCurrencyNumber(oldPrice);
+  const normalizedPrice = normalizeCurrencyNumber(price);
+
+  if (normalizedOldPrice > normalizedPrice && normalizedOldPrice > 0) {
+    return Math.round(
+      ((normalizedOldPrice - normalizedPrice) / normalizedOldPrice) * 100,
+    );
+  }
+
+  return 0;
+}
+
 function normalizeObjectValues(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -176,6 +194,30 @@ function buildVariantLabel(variant, categoryConfig) {
 function normalizeVariant(variant, categoryConfig) {
   const optionValues = normalizeObjectValues(variant?.optionValues);
   const attributes = normalizeObjectValues(variant?.attributes);
+  const regularPrice = normalizeCurrencyNumber(
+    variant?.regularPrice,
+    variant?.price,
+  );
+  const regularOldPrice = Math.max(
+    normalizeCurrencyNumber(variant?.regularOldPrice, variant?.oldPrice),
+    regularPrice,
+  );
+  const displayPrice = normalizeCurrencyNumber(
+    variant?.displayPrice,
+    regularPrice,
+  );
+  const displayOldPrice = Math.max(
+    normalizeCurrencyNumber(variant?.displayOldPrice, regularOldPrice),
+    displayPrice,
+  );
+  const regularDiscountPercentage = computeDiscountPercentage(
+    regularOldPrice,
+    regularPrice,
+  );
+  const displayDiscountPercentage = computeDiscountPercentage(
+    displayOldPrice,
+    displayPrice,
+  );
 
   return {
     ...variant,
@@ -183,8 +225,18 @@ function normalizeVariant(variant, categoryConfig) {
     sku: String(variant?.sku ?? "").trim(),
     title: String(variant?.title ?? "").trim(),
     label: buildVariantLabel(variant, categoryConfig),
-    price: Number(variant?.price ?? 0),
-    oldPrice: Number(variant?.oldPrice ?? 0),
+    price: normalizeCurrencyNumber(variant?.price),
+    oldPrice: normalizeCurrencyNumber(variant?.oldPrice),
+    regularPrice,
+    regularOldPrice,
+    regularDiscountPercentage,
+    displayPrice,
+    displayOldPrice,
+    displayDiscountPercentage,
+    flashSaleDiscountPercent: normalizeCurrencyNumber(
+      variant?.flashSaleDiscountPercent,
+    ),
+    isFlashSaleActive: Boolean(variant?.isFlashSaleActive),
     stock: Math.max(0, Number(variant?.stock ?? 0)),
     image: String(variant?.image ?? "").trim(),
     optionValues,
@@ -295,14 +347,69 @@ function normalizeProduct(product) {
   const oldPrice =
     variants.length > 0
       ? Math.max(
-          ...variants.map((variant) => Number(variant?.oldPrice ?? 0)),
+          ...variants.map((variant) => normalizeCurrencyNumber(variant?.oldPrice)),
           0,
         )
-      : Number(product?.oldPrice ?? 0);
+      : normalizeCurrencyNumber(product?.oldPrice);
   const price =
     variants.length > 0
-      ? Math.min(...variants.map((variant) => Number(variant?.price ?? 0)))
-      : Number(product?.price ?? 0);
+      ? Math.min(...variants.map((variant) => normalizeCurrencyNumber(variant?.price)))
+      : normalizeCurrencyNumber(product?.price);
+  const regularPrice =
+    variants.length > 0
+      ? Math.min(
+          ...variants.map((variant) =>
+            normalizeCurrencyNumber(variant?.regularPrice, variant?.price),
+          ),
+        )
+      : normalizeCurrencyNumber(product?.regularPrice, price);
+  const regularOldPrice =
+    variants.length > 0
+      ? Math.max(
+          ...variants.map((variant) =>
+            normalizeCurrencyNumber(
+              variant?.regularOldPrice,
+              variant?.oldPrice ?? variant?.price,
+            ),
+          ),
+          regularPrice,
+        )
+      : Math.max(
+          normalizeCurrencyNumber(product?.regularOldPrice, oldPrice),
+          regularPrice,
+        );
+  const displayPrice =
+    variants.length > 0
+      ? Math.min(
+          ...variants.map((variant) =>
+            normalizeCurrencyNumber(
+              variant?.displayPrice,
+              variant?.regularPrice ?? variant?.price,
+            ),
+          ),
+        )
+      : normalizeCurrencyNumber(product?.displayPrice, regularPrice);
+  const displayOldPrice =
+    variants.length > 0
+      ? Math.max(
+          ...variants.map((variant) =>
+            normalizeCurrencyNumber(
+              variant?.displayOldPrice,
+              variant?.regularOldPrice ?? variant?.oldPrice ?? variant?.price,
+            ),
+          ),
+          displayPrice,
+        )
+      : Math.max(
+          normalizeCurrencyNumber(product?.displayOldPrice, regularOldPrice),
+          displayPrice,
+        );
+  const regularDiscountPercentage =
+    Number(product?.regularDiscountPercentage) ||
+    computeDiscountPercentage(regularOldPrice, regularPrice);
+  const displayDiscountPercentage =
+    Number(product?.displayDiscountPercentage) ||
+    computeDiscountPercentage(displayOldPrice, displayPrice);
   const derivedColors = [
     ...new Set(
       variants
@@ -322,9 +429,7 @@ function normalizeProduct(product) {
       ? variants.reduce((sum, variant) => sum + Number(variant?.stock ?? 0), 0)
       : stock;
   const discountPercentage =
-    oldPrice > price && oldPrice > 0
-      ? Math.round(((oldPrice - price) / oldPrice) * 100)
-      : Number(product?.discountPercentage ?? 0);
+    displayDiscountPercentage || Number(product?.discountPercentage ?? 0);
 
   const normalizedProduct = {
     ...product,
@@ -373,7 +478,36 @@ function normalizeProduct(product) {
     stock: resolvedStock <= 0 ? 0 : resolvedStock,
     price,
     oldPrice,
+    regularPrice,
+    regularOldPrice,
+    regularDiscountPercentage,
+    displayPrice,
+    displayOldPrice,
+    displayDiscountPercentage,
     discountPercentage,
+    flashSaleDiscountPercent: normalizeCurrencyNumber(
+      product?.flashSaleDiscountPercent ??
+        product?.flashSale?.discountPercent,
+    ),
+    flashSaleCampaignId: String(
+      product?.flashSale?.campaignId ?? "",
+    ).trim(),
+    isFlashSaleActive: Boolean(product?.isFlashSaleActive),
+    soldCount: Math.max(0, Number(product?.soldCount ?? 0)),
+    flashSale:
+      product?.flashSale && typeof product.flashSale === "object"
+        ? {
+            campaignId: String(product.flashSale?.campaignId ?? "").trim(),
+            discountPercent: normalizeCurrencyNumber(
+              product.flashSale?.discountPercent,
+            ),
+            requestedAt: product.flashSale?.requestedAt ?? null,
+          }
+        : {
+            campaignId: "",
+            discountPercent: 0,
+            requestedAt: null,
+          },
   };
 
   if (resolvedStock <= 0) {

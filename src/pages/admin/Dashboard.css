@@ -34,6 +34,101 @@
   background: #fff;
 }
 
+.admin-dashboard__flash-sale {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+}
+
+.admin-dashboard__flash-sale-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.admin-dashboard__flash-sale-grid label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  color: #334155;
+}
+
+.admin-dashboard__flash-sale-grid input {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.admin-dashboard__flash-sale-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.admin-dashboard__flash-sale-actions button {
+  border: 0;
+  border-radius: 10px;
+  background: #ea580c;
+  color: #fff;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-dashboard__flash-sale-actions button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.admin-dashboard__ghost-button {
+  background: #fff !important;
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.admin-dashboard__flash-products {
+  margin-top: 18px;
+  border-top: 1px solid #fed7aa;
+  padding-top: 16px;
+}
+
+.admin-dashboard__flash-products-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.admin-dashboard__flash-products-header span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.admin-dashboard__flash-products-table {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-dashboard__flash-products-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1.1fr 1fr 1fr 0.8fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  align-items: center;
+}
+
+.admin-dashboard__flash-products-row--head {
+  background: #ffedd5;
+  font-weight: 700;
+}
+
 .admin-dashboard__shops-header {
   display: flex;
   align-items: center;
@@ -147,6 +242,10 @@
   .admin-dashboard__focus-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .admin-dashboard__flash-products-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -156,6 +255,11 @@
   }
 
   .admin-dashboard__focus-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-dashboard__flash-sale-grid,
+  .admin-dashboard__flash-products-row {
     grid-template-columns: 1fr;
   }
 }
