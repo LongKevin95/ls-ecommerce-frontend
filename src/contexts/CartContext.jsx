@@ -49,11 +49,22 @@ function normalizeCartItem(product, quantity, selectedOptions = {}) {
   const nextQuantity = Math.max(1, Number(quantity) || 1);
   const normalizedColor = selectedOptions.color || "Default";
   const normalizedSize = selectedOptions.size || "M";
+  const normalizedVariantId = String(selectedOptions.variantId ?? "").trim();
+  const normalizedVariantLabel = String(selectedOptions.variantLabel ?? "").trim();
+  const normalizedSku = String(selectedOptions.sku ?? "").trim();
+  const resolvedPrice = Number(
+    selectedOptions.price ??
+      product.displayPrice ??
+      product.price ??
+      0,
+  ) || 0;
 
   return {
     productId: String(product.id),
+    variantId: normalizedVariantId,
+    variantLabel: normalizedVariantLabel,
     title: product.title,
-    price: Number(product.price) || 0,
+    price: resolvedPrice,
     quantity: nextQuantity,
     vendorEmail: String(product.vendorEmail ?? "")
       .trim()
@@ -66,13 +77,14 @@ function normalizeCartItem(product, quantity, selectedOptions = {}) {
       product.image ||
       (Array.isArray(product.images) ? product.images[0] : "") ||
       "/favicon.svg",
+    sku: normalizedSku,
     color: normalizedColor,
     size: normalizedSize,
   };
 }
 
 function buildCartItemKey(item) {
-  return `${item.productId}-${item.color}-${item.size}`;
+  return `${item.productId}-${item.variantId || "default"}-${item.color}-${item.size}`;
 }
 
 export function CartProvider({ children }) {
