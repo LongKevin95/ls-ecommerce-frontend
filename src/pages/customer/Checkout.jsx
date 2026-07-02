@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
 
+import { getProductById } from "../../api/productApi";
 import { useAuth } from "../../hooks/useAuth";
 import { useCart } from "../../hooks/useCart";
+import { useFlashSaleQuery } from "../../hooks/useFlashSaleQuery";
 import { createOrder } from "../../api/ordersApi";
 import { initSePayCheckout } from "../../api/paymentsApi";
+import { resolveVariantPriceState } from "../../utils/flashSalePricing";
 import "./Checkout.css";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -62,15 +65,77 @@ function submitHostedPaymentForm(checkoutForm) {
 function Checkout() {
   const { user, isCustomer } = useAuth();
   const queryClient = useQueryClient();
-  const { items, subtotal, deleteAllItems, buildCartItemKey } = useCart();
+  const { items, deleteAllItems, buildCartItemKey } = useCart();
+  const { data: flashSaleState } = useFlashSaleQuery();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState(initialFormData);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const cartProductIds = useMemo(
+    () =>
+      [
+        ...new Set(items.map((item) => String(item?.productId ?? "").trim())),
+      ].filter(Boolean),
+    [items],
+  );
+  const cartProductDetailQueries = useQueries({
+    queries: cartProductIds.map((productId) => ({
+      queryKey: ["products", "detail", productId],
+      queryFn: () => getProductById(productId),
+      enabled: Boolean(productId),
+      staleTime: 1000 * 60 * 5,
+    })),
+  });
+  const cartProductDetailById = useMemo(
+    () =>
+      new Map(
+        cartProductIds.map((productId, index) => [
+          productId,
+          cartProductDetailQueries[index]?.data ?? null,
+        ]),
+      ),
+    [cartProductDetailQueries, cartProductIds],
+  );
+  const pricedItems = useMemo(
+    () =>
+      items.map((item) => {
+        const productId = String(item?.productId ?? "").trim();
+        const variantId = String(item?.variantId ?? "").trim();
+        const productDetail = cartProductDetailById.get(productId) ?? null;
+        const variants = Array.isArray(productDetail?.variants)
+          ? productDetail.variants
+          : [];
+        const selectedVariant = variantId
+          ? (variants.find(
+              (variant) => String(variant?.id ?? "").trim() === variantId,
+            ) ?? null)
+          : null;
+        const priceState = productDetail
+          ? resolveVariantPriceState(selectedVariant, productDetail, flashSaleState)
+          : {
+              currentPrice: Number(item?.price ?? 0),
+            };
+
+        return {
+          ...item,
+          livePrice: Number(priceState.currentPrice ?? item?.price ?? 0),
+        };
+      }),
+    [cartProductDetailById, flashSaleState, items],
+  );
 
   const canPurchase = isCustomer;
   const shipping = items.length > 0 ? DELIVERY_FEE : 0;
+  const subtotal = useMemo(
+    () =>
+      pricedItems.reduce(
+        (sum, item) =>
+          sum + Number(item.livePrice ?? item.price ?? 0) * Number(item.quantity ?? 0),
+        0,
+      ),
+    [pricedItems],
+  );
   const total = subtotal + shipping;
   const normalizedCustomerEmail = String(user?.email ?? "")
     .trim()
@@ -161,14 +226,14 @@ function Checkout() {
       country: String(formData.country ?? "").trim(),
     };
 
-    const orderItems = items.map((item) => ({
+    const orderItems = pricedItems.map((item) => ({
       productId: String(item?.productId ?? ""),
       variantId: String(item?.variantId ?? ""),
       variantLabel: String(item?.variantLabel ?? "").trim(),
       title: item?.title ?? "Product",
       image: item?.image ?? "/favicon.svg",
       quantity: Number(item?.quantity ?? 0),
-      price: Number(item?.price ?? 0),
+      price: Number(item?.livePrice ?? item?.price ?? 0),
       vendorEmail: String(item?.vendorEmail ?? "")
         .trim()
         .toLowerCase(),
@@ -402,7 +467,7 @@ function Checkout() {
                   <Link to="/cart">Về giỏ hàng</Link>
                 </div>
               ) : (
-                items.map((item) => (
+                pricedItems.map((item) => (
                   <article
                     key={buildCartItemKey(item)}
                     className="checkout-product-item"
@@ -418,7 +483,9 @@ function Checkout() {
                       </small>
                     </div>
                     <strong>
-                      {currency.format(item.price * item.quantity)}
+                      {currency.format(
+                        Number(item.livePrice ?? item.price ?? 0) * item.quantity,
+                      )}
                     </strong>
                   </article>
                 ))

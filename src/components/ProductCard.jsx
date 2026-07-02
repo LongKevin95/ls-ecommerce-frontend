@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Link } from "react-router-dom";
 
+import { resolveProductPriceState } from "../utils/flashSalePricing";
 import "./ProductCard.css";
 
 const fallbackImage = "/favicon.svg";
@@ -11,9 +12,15 @@ const currency = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-function ProductCard({ product }) {
+function ProductCard({ product, flashSaleState = null }) {
   const image = product?.image || fallbackImage;
-  const isOnSale = Number(product?.discountPercentage) > 0;
+  const {
+    currentPrice,
+    currentOldPrice,
+    currentDiscountPercentage,
+    isFlashSaleActive,
+  } = resolveProductPriceState(product, flashSaleState);
+  const isOnSale = currentDiscountPercentage > 0;
   const shopLabel =
     product?.shopName ||
     product?.vendorName ||
@@ -26,7 +33,7 @@ function ProductCard({ product }) {
       .trim()
       .charAt(0)
       .toUpperCase() || "S";
-  const ratingStars = Math.max(1, Math.round(Number(product.rating ?? 0)));
+  const ratingStars = Math.max(1, Math.round(Number(product?.rating ?? 0)));
 
   return (
     <article className="product-card">
@@ -37,7 +44,8 @@ function ProductCard({ product }) {
       >
         {isOnSale && (
           <span className="product-card__badge">
-            -{product.discountPercentage}%
+            {isFlashSaleActive ? "Flash " : "-"}
+            {currentDiscountPercentage}%
           </span>
         )}
         <img src={image} alt={product.title} loading="lazy" />
@@ -54,22 +62,23 @@ function ProductCard({ product }) {
 
         <div className="product-card__price-row">
           <span className="product-card__price">
-            {currency.format(product.price)}
+            {currency.format(currentPrice)}
           </span>
-          {product.oldPrice > product.price && (
+          {currentOldPrice > currentPrice && (
             <span className="product-card__old-price">
-              {currency.format(product.oldPrice)}
+              {currency.format(currentOldPrice)}
             </span>
           )}
+        </div>
 
-          <div className="product-card__meta product-card__meta--rating">
-            <span className="product-card__rating">
-              {"★".repeat(ratingStars)}
-            </span>
-            <span className="product-card__reviews">
-              ({product.reviews || 0})
-            </span>
-          </div>
+        <div className="product-card__meta product-card__meta--rating">
+          <span className="product-card__rating">
+            {"★".repeat(ratingStars)}
+          </span>
+          <span className="product-card__reviews">({product.reviews || 0})</span>
+          <span className="product-card__sold">
+            Da ban {Number(product?.soldCount ?? 0)}
+          </span>
         </div>
 
         <div className="product-card__meta">

@@ -10,6 +10,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useOrdersQuery } from "../../hooks/useOrdersQuery";
 import { useProductsQuery } from "../../hooks/useProductsQuery";
 import { useUsersQuery } from "../../hooks/useUsersQuery";
+import { syncProductCaches } from "../../utils/productCache";
 import "./MyOrders.css";
 
 const currency = new Intl.NumberFormat("vi-VN", {
@@ -243,6 +244,7 @@ export default function MyOrders() {
   const [reviewComment, setReviewComment] = useState("");
   const [reviewStars, setReviewStars] = useState(5);
   const [processingReviewItemKey, setProcessingReviewItemKey] = useState("");
+  const [reviewFeedbackMessage, setReviewFeedbackMessage] = useState("");
 
   const vendorMapByEmail = useMemo(
     () =>
@@ -479,6 +481,7 @@ export default function MyOrders() {
     setSelectedReviewItemKey(firstReviewItem?.reviewKey ?? "");
     setReviewComment("");
     setReviewStars(5);
+    setReviewFeedbackMessage("");
   };
 
   const handleCloseReviewModal = () => {
@@ -487,12 +490,14 @@ export default function MyOrders() {
     setReviewComment("");
     setReviewStars(5);
     setProcessingReviewItemKey("");
+    setReviewFeedbackMessage("");
   };
 
   const handleSelectReviewItem = (reviewKey) => {
     setSelectedReviewItemKey(reviewKey);
     setReviewComment("");
     setReviewStars(5);
+    setReviewFeedbackMessage("");
   };
 
   const handleSubmitReview = async (event) => {
@@ -536,7 +541,7 @@ export default function MyOrders() {
     try {
       setProcessingReviewItemKey(selectedReviewItem.reviewKey);
 
-      await addProductReview({
+      const updatedProduct = await addProductReview({
         productId: selectedReviewItem.productId,
         review: {
           customerEmail: user.email,
@@ -546,16 +551,19 @@ export default function MyOrders() {
         },
       });
 
+      syncProductCaches(queryClient, updatedProduct);
+
       setReviewComment("");
       setReviewStars(5);
+      setReviewFeedbackMessage(
+        "Đánh giá của bạn đã được lưu và hiển thị ngay trên sản phẩm.",
+      );
 
       if (nextReviewItem) {
         setSelectedReviewItemKey(nextReviewItem.reviewKey);
       }
 
-      await queryClient.invalidateQueries({ queryKey: ["products", "public"] });
-      await queryClient.invalidateQueries({ queryKey: ["products", "admin"] });
-      window.alert("Đã gửi đánh giá thành công.");
+      await queryClient.invalidateQueries({ queryKey: ["products"] });
     } catch (error) {
       window.alert(error?.message ?? "Không thể gửi đánh giá.");
     } finally {
@@ -599,7 +607,7 @@ export default function MyOrders() {
               <input
                 id="my-orders-search-input"
                 type="search"
-                placeholder="Tìm theo mã đơn, tên shop hoặc sản phẩm"
+                placeholder="Tìm mã đơn, shop hoặc sản phẩm"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
               />
@@ -1031,6 +1039,12 @@ export default function MyOrders() {
                   onSubmit={handleSubmitReview}
                 >
                   <h4>Viết đánh giá</h4>
+
+                  {reviewFeedbackMessage ? (
+                    <p className="product-review-feedback" role="status">
+                      {reviewFeedbackMessage}
+                    </p>
+                  ) : null}
 
                   {selectedReviewItem ? (
                     <div className="my-orders-review-form__product">

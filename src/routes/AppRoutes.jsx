@@ -50,7 +50,9 @@ export default function AppRoutes() {
         path="/my-orders"
         element={
           <PrivateRoute>
-            <MyOrders />
+            <RoleRoute role="customer">
+              <MyOrders />
+            </RoleRoute>
           </PrivateRoute>
         }
       />
@@ -59,7 +61,9 @@ export default function AppRoutes() {
         path="/payment/result"
         element={
           <PrivateRoute>
-            <PaymentResult />
+            <RoleRoute role="customer">
+              <PaymentResult />
+            </RoleRoute>
           </PrivateRoute>
         }
       />

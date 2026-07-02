@@ -5,7 +5,9 @@ import { useQueries } from "@tanstack/react-query";
 import { getProductById } from "../../api/productApi";
 import { useAuth } from "../../hooks/useAuth";
 import { useCart } from "../../hooks/useCart";
+import { useFlashSaleQuery } from "../../hooks/useFlashSaleQuery";
 import { useUsersQuery } from "../../hooks/useUsersQuery";
+import { resolveVariantPriceState } from "../../utils/flashSalePricing";
 import "./Cart.css";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -19,9 +21,9 @@ const DELIVERY_FEE = 5;
 function Cart() {
   const { user, isCustomer, isVendor } = useAuth();
   const { data: users = [] } = useUsersQuery();
+  const { data: flashSaleState } = useFlashSaleQuery();
   const {
     items,
-    subtotal,
     increaseItemQuantity,
     decreaseItemQuantity,
     removeItem,
@@ -129,6 +131,42 @@ function Cart() {
     [users],
   );
 
+  const pricedCartItems = useMemo(
+    () =>
+      items.map((item) => {
+        const productId = String(item?.productId ?? "").trim();
+        const variantId = String(item?.variantId ?? "").trim();
+        const productDetail = cartProductDetailById.get(productId) ?? null;
+        const variants = Array.isArray(productDetail?.variants)
+          ? productDetail.variants
+          : [];
+        const selectedVariant = variantId
+          ? (variants.find(
+              (variant) => String(variant?.id ?? "").trim() === variantId,
+            ) ?? null)
+          : null;
+        const priceState = productDetail
+          ? resolveVariantPriceState(selectedVariant, productDetail, flashSaleState)
+          : {
+              currentPrice: Number(item?.price ?? 0),
+            };
+
+        return {
+          ...item,
+          livePrice: Number(priceState.currentPrice ?? item?.price ?? 0),
+        };
+      }),
+    [cartProductDetailById, flashSaleState, items],
+  );
+  const subtotal = useMemo(
+    () =>
+      pricedCartItems.reduce(
+        (sum, item) =>
+          sum + Number(item.livePrice ?? item.price ?? 0) * Number(item.quantity ?? 0),
+        0,
+      ),
+    [pricedCartItems],
+  );
   const canPurchase = isCustomer && !isVendor;
   const total = subtotal + (items.length > 0 ? DELIVERY_FEE : 0);
 
@@ -165,7 +203,7 @@ function Cart() {
       return;
     }
 
-    const invalidStockItem = items.find((item) => {
+    const invalidStockItem = pricedCartItems.find((item) => {
       const itemKey = buildCartItemKey(item);
       const stockState = stockStateByItemKey.get(itemKey);
 
@@ -221,7 +259,7 @@ function Cart() {
               </Link>
             </div>
           ) : (
-            items.map((item) => {
+            pricedCartItems.map((item) => {
               const itemKey = buildCartItemKey(item);
               const stockState = stockStateByItemKey.get(itemKey);
               const vendorEmail = String(item?.vendorEmail ?? "")
@@ -308,7 +346,7 @@ function Cart() {
                             ? "Biến thể này đã hết hàng."
                             : `Còn ${currentStock} sản phẩm.`}
                     </p>
-                    <strong>{currency.format(item.price)}</strong>
+                    <strong>{currency.format(item.livePrice ?? item.price ?? 0)}</strong>
                   </div>
 
                   <div className="cart-item__actions">

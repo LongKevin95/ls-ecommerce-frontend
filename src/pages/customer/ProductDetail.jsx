@@ -11,14 +11,17 @@ import {
 import { useAdminProductsQuery } from "../../hooks/useAdminProductsQuery";
 import { useAuth } from "../../hooks/useAuth";
 import { useCart } from "../../hooks/useCart";
+import { useFlashSaleQuery } from "../../hooks/useFlashSaleQuery";
 import { useProductsQuery } from "../../hooks/useProductsQuery";
 import { useUsersQuery } from "../../hooks/useUsersQuery";
 import { useWishlist } from "../../hooks/useWishlist";
+import { resolveVariantPriceState } from "../../utils/flashSalePricing";
+import { syncProductCaches } from "../../utils/productCache";
 import "./ProductDetail.css";
 
-const currency = new Intl.NumberFormat("en-US", {
+const currency = new Intl.NumberFormat("vi-VN", {
   style: "currency",
-  currency: "USD",
+  currency: "VND",
   maximumFractionDigits: 0,
 });
 const fallbackImage = "/favicon.svg";
@@ -156,6 +159,7 @@ function ProductDetail() {
     enabled: canInspectHiddenProducts,
   });
   const { data: users = [] } = useUsersQuery();
+  const { data: flashSaleState } = useFlashSaleQuery();
 
   const userMapByEmail = useMemo(
     () =>
@@ -296,9 +300,10 @@ function ProductDetail() {
   });
 
   const product = detailProduct ?? resolvedProductFromLists ?? previewProduct;
-  const productVariants = Array.isArray(product?.variants)
-    ? product.variants
-    : [];
+  const productVariants = useMemo(
+    () => (Array.isArray(product?.variants) ? product.variants : []),
+    [product?.variants],
+  );
   const selectedVariantId =
     selectedVariantIdByProduct[id] ??
     product?.defaultVariantId ??
@@ -398,9 +403,14 @@ function ProductDetail() {
 
   const productColors = Array.isArray(product?.colors) ? product.colors : [];
   const productSizes = Array.isArray(product?.sizes) ? product.sizes : [];
-  const activePrice = Number(selectedVariant?.price ?? product?.price ?? 0);
-  const activeOldPrice = Number(
-    selectedVariant?.oldPrice ?? product?.oldPrice ?? 0,
+  const activePriceState = useMemo(
+    () => resolveVariantPriceState(selectedVariant, product, flashSaleState),
+    [flashSaleState, product, selectedVariant],
+  );
+  const activePrice = Number(activePriceState.currentPrice ?? 0);
+  const activeOldPrice = Number(activePriceState.currentOldPrice ?? 0);
+  const activeDiscountPercentage = Number(
+    activePriceState.currentDiscountPercentage ?? 0,
   );
   const activeStock = Number(selectedVariant?.stock ?? product?.stock ?? 0);
   const normalizedStatus = String(product?.status ?? "")
@@ -522,6 +532,8 @@ function ProductDetail() {
     addToCart(product, quantity, {
       variantId: selectedVariant?.id,
       variantLabel: selectedVariant?.label,
+      sku: selectedVariant?.sku,
+      price: activePrice,
       color: selectedColor,
       size: selectedSize,
     });
@@ -540,6 +552,8 @@ function ProductDetail() {
     addToCart(product, quantity, {
       variantId: selectedVariant?.id,
       variantLabel: selectedVariant?.label,
+      sku: selectedVariant?.sku,
+      price: activePrice,
       color: selectedColor,
       size: selectedSize,
     });
@@ -576,7 +590,7 @@ function ProductDetail() {
     try {
       setProcessingReplyKey(reviewKey);
 
-      await upsertVendorReply({
+      const updatedProduct = await upsertVendorReply({
         productId: product.id,
         reviewCreatedAt: reviewItem.createdAt,
         customerEmail: reviewItem.customerEmail,
@@ -584,13 +598,14 @@ function ProductDetail() {
         replyText,
       });
 
+      syncProductCaches(queryClient, updatedProduct);
+
       setReplyTextByReview((previous) => ({
         ...previous,
         [reviewKey]: "",
       }));
 
-      await queryClient.invalidateQueries({ queryKey: ["products", "public"] });
-      await queryClient.invalidateQueries({ queryKey: ["products", "admin"] });
+      await queryClient.invalidateQueries({ queryKey: ["products"] });
     } catch (error) {
       window.alert(error?.message ?? "Khong the gui phan hoi.");
     } finally {
@@ -651,12 +666,15 @@ function ProductDetail() {
                   <span className="rating-count">
                     ({product.reviews || 0} Reviews)
                   </span>
+                  <span className="rating-count">
+                    Da ban {Number(product?.soldCount ?? 0)}
+                  </span>
                   <span
                     className={`stock-state ${
                       isOutOfStock ? "stock-state--out" : "stock-state--in"
                     }`}
                   >
-                    {isOutOfStock ? "Out of Stock" : "In Stock"}
+                    {isOutOfStock ? "Hết hàng" : "Còn hàng"}
                   </span>
                 </div>
 
@@ -666,8 +684,17 @@ function ProductDetail() {
                   </p>
                 )}
 
-                <div className="product-info__price">
-                  {currency.format(activePrice)}
+                <div className="product-info__price-line">
+                  <div className="product-info__price">
+                    {currency.format(activePrice)}
+                  </div>
+
+                    {activeDiscountPercentage > 0 && (
+                      <span className="product-info__sale-badge">
+                        {activePriceState.isFlashSaleActive ? "Flash Sale" : "Sale"} -
+                      {activeDiscountPercentage}%
+                    </span>
+                  )}
                 </div>
 
                 {activeOldPrice > activePrice && (
@@ -679,7 +706,7 @@ function ProductDetail() {
                 <p className="product-info__description">
                   {product.description}
                 </p>
-                <p className="product-shop-label">Sold by: {vendorShopLabel}</p>
+                <p className="product-shop-label">Shop: {vendorShopLabel}</p>
 
                 {shouldShowProductInformation && (
                   <div className="product-meta-card">
@@ -883,7 +910,7 @@ function ProductDetail() {
                     disabled={isPurchaseDisabled}
                     onClick={handleBuyNow}
                   >
-                    Buy Now
+                    Mua ngay
                   </button>
 
                   <button
@@ -892,7 +919,7 @@ function ProductDetail() {
                     disabled={isPurchaseDisabled}
                     onClick={handleAddToCart}
                   >
-                    Add To Cart
+                    Thêm vào giỏ
                   </button>
 
                   {isCustomerAccount ? (
@@ -908,7 +935,7 @@ function ProductDetail() {
                       className="action-btn action-btn--primary action-btn--link"
                       to={`/vendor/products?edit=${product.id}`}
                     >
-                      Edit my product
+                      Sửa sản phẩm
                     </Link>
                   ) : null}
                 </div>
@@ -931,12 +958,12 @@ function ProductDetail() {
 
                 <div className="delivery-box">
                   <div className="delivery-box__item">
-                    <h4>Free Delivery</h4>
-                    <p>Enter your postal code for Delivery Availability</p>
+                    <h4>Giao hàng</h4>
+                    <p>Kiểm tra khu vực nhận hàng và thời gian giao dự kiến.</p>
                   </div>
                   <div className="delivery-box__item">
-                    <h4>Return Delivery</h4>
-                    <p>Free 30 Days Delivery Returns.</p>
+                    <h4>Đổi trả</h4>
+                    <p>Hỗ trợ đổi trả theo chính sách của shop.</p>
                   </div>
                 </div>
               </div>
@@ -944,7 +971,7 @@ function ProductDetail() {
           </section>
 
           <section className="product-reviews">
-            <h3>Customer Reviews</h3>
+            <h3>Đánh giá từ khách hàng</h3>
 
             <div className="product-reviews__layout">
               <div className="product-reviews__list-wrap">
@@ -979,7 +1006,7 @@ function ProductDetail() {
                         <p>{reviewItem.comment}</p>
                         {reviewItem?.vendorReply?.text && (
                           <div className="product-review-reply">
-                            <strong>Shop reply:</strong>
+                            <strong>Phản hồi từ shop</strong>
                             <p>{reviewItem.vendorReply.text}</p>
                           </div>
                         )}
@@ -988,7 +1015,7 @@ function ProductDetail() {
                           <div className="product-review-reply-form">
                             <textarea
                               rows="2"
-                              placeholder="Reply to this customer..."
+                              placeholder="Nhập phản hồi cho khách hàng..."
                               value={
                                 replyTextByReview[
                                   `${reviewItem.customerEmail}-${reviewItem.createdAt}`
@@ -1012,8 +1039,8 @@ function ProductDetail() {
                             >
                               {processingReplyKey ===
                               `${reviewItem.customerEmail}-${reviewItem.createdAt}`
-                                ? "Replying..."
-                                : "Reply"}
+                                ? "Đang gửi..."
+                                : "Gửi phản hồi"}
                             </button>
                           </div>
                         )}
@@ -1091,11 +1118,15 @@ function ProductDetail() {
         ) : relatedProducts.length === 0 ? (
           <p className="related-section__empty">No related items yet.</p>
         ) : (
-          <div className="related-grid">
-            {relatedProducts.map((item) => (
-              <ProductCard key={item.id} product={item} />
-            ))}
-          </div>
+            <div className="related-grid">
+              {relatedProducts.map((item) => (
+                <ProductCard
+                  key={item.id}
+                  product={item}
+                  flashSaleState={flashSaleState}
+                />
+              ))}
+            </div>
         )}
       </section>
 

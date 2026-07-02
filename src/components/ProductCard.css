@@ -97,10 +97,8 @@
 }
 
 .product-card__meta--rating {
-  margin-top: 0;
-  margin-right: 8px;
-  margin-left: auto;
-  flex-wrap: nowrap;
+  margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .product-card__shop {
@@ -145,4 +143,10 @@
 .product-card__reviews {
   color: #777;
   font-size: 14px;
+}
+
+.product-card__sold {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
 }
