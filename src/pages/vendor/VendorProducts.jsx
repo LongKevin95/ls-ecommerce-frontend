@@ -684,8 +684,8 @@ export default function VendorProducts() {
     (vendorEmail ? vendorEmail.split("@")[0] : "My Shop");
   const isFlashSaleCampaignOpen = Boolean(
     flashSaleState?.isEnabled &&
-      String(flashSaleState?.currentCampaignId ?? "").trim() &&
-      Date.parse(String(flashSaleState?.endsAt ?? "").trim()) > Date.now(),
+    String(flashSaleState?.currentCampaignId ?? "").trim() &&
+    Date.parse(String(flashSaleState?.endsAt ?? "").trim()) > Date.now(),
   );
 
   const vendorProducts = useMemo(() => {
@@ -844,99 +844,105 @@ export default function VendorProducts() {
     return String(params.get("edit") ?? "").trim();
   }, [location.search]);
 
-  const applyEditingProduct = useCallback((product) => {
-    const productThumbnail = getProductThumbnail(product);
-    const productGalleryImages = getProductGalleryImages(product);
-    const nextVariantRows =
-      Array.isArray(product?.variants) && product.variants.length > 0
-        ? ensureSingleDefaultVariant(
-            product.variants.map((variant) =>
-              createVariantDraft(product.category, {
-                localId: variant.id,
-                sku: variant.sku,
-                title: variant.title,
-                price: variant.price,
-                oldPrice: variant.oldPrice,
-                stock: variant.stock,
-                image: variant.image,
-                isDefault: variant.isDefault,
-                optionValues: variant.optionValues,
-                attributes: variant.attributes,
-              }),
-            ),
-            String(
-              product.variants.find((variant) => variant?.isDefault)?.id ??
-                product.defaultVariantId ??
-                "",
-            ).trim(),
-          )
-        : [];
+  const applyEditingProduct = useCallback(
+    (product) => {
+      const productThumbnail = getProductThumbnail(product);
+      const productGalleryImages = getProductGalleryImages(product);
+      const nextVariantRows =
+        Array.isArray(product?.variants) && product.variants.length > 0
+          ? ensureSingleDefaultVariant(
+              product.variants.map((variant) =>
+                createVariantDraft(product.category, {
+                  localId: variant.id,
+                  sku: variant.sku,
+                  title: variant.title,
+                  price: variant.price,
+                  oldPrice: variant.oldPrice,
+                  stock: variant.stock,
+                  image: variant.image,
+                  isDefault: variant.isDefault,
+                  optionValues: variant.optionValues,
+                  attributes: variant.attributes,
+                }),
+              ),
+              String(
+                product.variants.find((variant) => variant?.isDefault)?.id ??
+                  product.defaultVariantId ??
+                  "",
+              ).trim(),
+            )
+          : [];
 
-    setEditingId(String(product.id));
-    setForm({
-      title: product.title ?? "",
-      category: product.category ?? "",
-      description: product.description ?? "",
-      price: String(product.price ?? ""),
-      stock: String(product.stock ?? 0),
-      flashSaleEnabled:
-        isFlashSaleCampaignOpen &&
-        String(product?.flashSaleCampaignId ?? "").trim() ===
-          String(flashSaleState?.currentCampaignId ?? "").trim(),
-      flashSaleDiscountPercent:
-        isFlashSaleCampaignOpen &&
-        String(product?.flashSaleCampaignId ?? "").trim() ===
-          String(flashSaleState?.currentCampaignId ?? "").trim()
-          ? String(product?.flashSaleDiscountPercent ?? "")
+      setEditingId(String(product.id));
+      setForm({
+        title: product.title ?? "",
+        category: product.category ?? "",
+        description: product.description ?? "",
+        price: String(product.price ?? ""),
+        stock: String(product.stock ?? 0),
+        flashSaleEnabled:
+          isFlashSaleCampaignOpen &&
+          String(product?.flashSaleCampaignId ?? "").trim() ===
+            String(flashSaleState?.currentCampaignId ?? "").trim(),
+        flashSaleDiscountPercent:
+          isFlashSaleCampaignOpen &&
+          String(product?.flashSaleCampaignId ?? "").trim() ===
+            String(flashSaleState?.currentCampaignId ?? "").trim()
+            ? String(product?.flashSaleDiscountPercent ?? "")
+            : "",
+        colorsText: Array.isArray(product.colors)
+          ? product.colors.join(", ")
           : "",
-      colorsText: Array.isArray(product.colors)
-        ? product.colors.join(", ")
-        : "",
-      sizesText: Array.isArray(product.sizes) ? product.sizes.join(", ") : "",
-      brand: String(product?.attributes?.brand ?? ""),
-      material: String(product?.attributes?.material ?? ""),
-      model: String(product?.attributes?.model ?? ""),
-      warrantyMonths: String(product?.attributes?.warrantyMonths ?? ""),
-      expiryDate: String(product?.attributes?.expiryDate ?? ""),
-      weight: String(product?.attributes?.weight ?? ""),
-      thumbnailUrl: isInlineImageSource(productThumbnail)
-        ? ""
-        : productThumbnail,
-      galleryUrlsText: productGalleryImages
-        .filter((image) => !isInlineImageSource(image))
-        .join("\n"),
-    });
-    setExistingThumbnail(productThumbnail);
-    setExistingGalleryImages(productGalleryImages);
-    setSelectedThumbnailFile(null);
-    setSelectedGalleryFiles([]);
-    setVariantRows(nextVariantRows);
-    setVariantDraft(
-      createVariantDraft(product.category, {
-        price: product.price,
-        oldPrice: product.oldPrice,
-        stock: product.stock,
-        image: productThumbnail,
-      }),
-    );
-    setVariantGeneratorInputs(
-      buildGeneratorInputsFromVariants(product.category, nextVariantRows),
-    );
-    setEditingVariantLocalId("");
-    setImagePendingRemoval(null);
-    setErrorMessage("");
-  }, [flashSaleState?.currentCampaignId, isFlashSaleCampaignOpen]);
+        sizesText: Array.isArray(product.sizes) ? product.sizes.join(", ") : "",
+        brand: String(product?.attributes?.brand ?? ""),
+        material: String(product?.attributes?.material ?? ""),
+        model: String(product?.attributes?.model ?? ""),
+        warrantyMonths: String(product?.attributes?.warrantyMonths ?? ""),
+        expiryDate: String(product?.attributes?.expiryDate ?? ""),
+        weight: String(product?.attributes?.weight ?? ""),
+        thumbnailUrl: isInlineImageSource(productThumbnail)
+          ? ""
+          : productThumbnail,
+        galleryUrlsText: productGalleryImages
+          .filter((image) => !isInlineImageSource(image))
+          .join("\n"),
+      });
+      setExistingThumbnail(productThumbnail);
+      setExistingGalleryImages(productGalleryImages);
+      setSelectedThumbnailFile(null);
+      setSelectedGalleryFiles([]);
+      setVariantRows(nextVariantRows);
+      setVariantDraft(
+        createVariantDraft(product.category, {
+          price: product.price,
+          oldPrice: product.oldPrice,
+          stock: product.stock,
+          image: productThumbnail,
+        }),
+      );
+      setVariantGeneratorInputs(
+        buildGeneratorInputsFromVariants(product.category, nextVariantRows),
+      );
+      setEditingVariantLocalId("");
+      setImagePendingRemoval(null);
+      setErrorMessage("");
+    },
+    [flashSaleState?.currentCampaignId, isFlashSaleCampaignOpen],
+  );
 
-  const startEditingProduct = useCallback((product) => {
-    const normalizedProductId = String(product?.id ?? "").trim();
+  const startEditingProduct = useCallback(
+    (product) => {
+      const normalizedProductId = String(product?.id ?? "").trim();
 
       if (!normalizedProductId) {
-        setErrorMessage("Không tìm thấy sản phẩm để chỉnh sửa.");
+        setErrorMessage("Product not found for editing.");
         return;
       }
 
-    applyEditingProduct(product);
-  }, [applyEditingProduct]);
+      applyEditingProduct(product);
+    },
+    [applyEditingProduct],
+  );
 
   useEffect(() => {
     setVariantRows((previous) => {
@@ -1041,103 +1047,10 @@ export default function VendorProducts() {
     setVariantRows(updatedRows);
 
     if (hasDuplicate) {
-      setErrorMessage("Biến thể với tổ hợp tùy chọn này đã tồn tại.");
+      setErrorMessage("A variant with this option combination already exists.");
     } else if (errorMessage) {
       setErrorMessage("");
     }
-  }
-
-  function getVariantImageInputId(localId) {
-    return `variant-image-file-${String(localId)}`;
-  }
-
-  const [invalidImageUrlByLocalId, setInvalidImageUrlByLocalId] = useState({});
-
-  async function headCheck(url) {
-    try {
-      const response = await fetch(url, { method: "HEAD" });
-      if (!response.ok) return false;
-      const contentType = response.headers.get("content-type") || "";
-      return contentType.includes("image");
-    } catch (_) {
-      return false;
-    }
-  }
-
-  function imageLoadCheck(url) {
-    return new Promise((resolve) => {
-      try {
-        const img = new Image();
-        img.onload = () => resolve(true);
-        img.onerror = () => resolve(false);
-        img.src = url;
-      } catch (_) {
-        resolve(false);
-      }
-    });
-  }
-
-  async function validateVariantImageUrl(localId, url) {
-    const value = String(url ?? "").trim();
-
-    if (!value) {
-      setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: false }));
-      return;
-    }
-
-    const looksLikeUrl =
-      /^(https?:)?\/\//i.test(value) || value.startsWith("data:");
-
-    if (!looksLikeUrl) {
-      setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: true }));
-      return;
-    }
-
-    if (value.startsWith("data:")) {
-      setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: false }));
-      return;
-    }
-
-    const ok = (await headCheck(value)) || (await imageLoadCheck(value));
-    setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: !ok }));
-  }
-
-  function requestUploadVariantImage(localId) {
-    const input = document.getElementById(getVariantImageInputId(localId));
-    if (input) {
-      input.click();
-    }
-  }
-
-  function handleVariantImageFileSelected(localId, event) {
-  function _handleVariantImageFileSelected(localId, event) {
-    const file = event?.target?.files?.[0] ?? null;
-    event.target.value = "";
-
-    if (!file) {
-      return;
-    }
-
-    if (!file.type?.startsWith("image/")) {
-      setErrorMessage("Vui lòng chọn file ảnh hợp lệ.");
-      return;
-    }
-
-    const maxSizeBytes = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSizeBytes) {
-      setErrorMessage("Ảnh quá lớn (tối đa 5MB).");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = String(reader.result || "");
-      handleInlineVariantChange(localId, "image", dataUrl);
-    };
-    reader.onerror = () => {
-      setErrorMessage("Không thể đọc file ảnh. Vui lòng thử lại.");
-    };
-    reader.readAsDataURL(file);
   }
 
   function handleSelectThumbnailFile(event) {
@@ -1167,7 +1080,7 @@ export default function VendorProducts() {
     setImagePendingRemoval({
       type: "thumbnail",
       image: existingThumbnail,
-      label: getStoredImageLabel(existingThumbnail, "Thumbnail hiện tại"),
+      label: getStoredImageLabel(existingThumbnail, "Current thumbnail"),
     });
 
     if (errorMessage) {
@@ -1380,13 +1293,13 @@ export default function VendorProducts() {
     );
 
     if (missingField) {
-      setErrorMessage(`Vui lòng nhập ${missingField.label} cho biến thể.`);
+      setErrorMessage(`Please enter ${missingField.label} for the variant.`);
       return;
     }
 
     if (!hasMeaningfulVariantDraft(variantDraft)) {
       setErrorMessage(
-        "Hãy nhập thông tin biến thể trước khi thêm vào danh sách.",
+        "Please enter the variant details before adding it to the list.",
       );
       return;
     }
@@ -1419,7 +1332,7 @@ export default function VendorProducts() {
       nextVariantWithSku.attributes?.colorHex &&
       !isValidHexColorValue(nextVariantWithSku.attributes.colorHex)
     ) {
-      setErrorMessage("Color HEX của biến thể không hợp lệ.");
+      setErrorMessage("The variant Color HEX is invalid.");
       return;
     }
 
@@ -1441,7 +1354,7 @@ export default function VendorProducts() {
           ) === nextSignature,
       )
     ) {
-      setErrorMessage("Biến thể với tổ hợp tùy chọn này đã tồn tại.");
+      setErrorMessage("A variant with this option combination already exists.");
       return;
     }
 
@@ -1535,7 +1448,7 @@ export default function VendorProducts() {
 
     if (missingField) {
       setErrorMessage(
-        `Vui lòng nhập ít nhất 1 giá trị cho ${missingField.label}.`,
+        `Please enter at least one value for ${missingField.label}.`,
       );
       return;
     }
@@ -1623,7 +1536,7 @@ export default function VendorProducts() {
     );
 
     if (generatedVariantsWithSku.length === 0) {
-      setErrorMessage("Tất cả tổ hợp biến thể đã tồn tại trong danh sách.");
+      setErrorMessage("All variant combinations already exist in the list.");
       return;
     }
 
@@ -1651,26 +1564,26 @@ export default function VendorProducts() {
 
     if (targetStatus === PRODUCT_STATUS.PENDING) {
       if (!title || !description || !category) {
-        setErrorMessage("Vui lòng nhập title, category và description.");
+        setErrorMessage("Please enter the title, category, and description.");
         return;
       }
 
       if (!rawPrice || !Number.isFinite(price) || price <= 0) {
-        setErrorMessage("Price phải là số lớn hơn 0.");
+        setErrorMessage("Price must be greater than 0.");
         return;
       }
     } else if (rawPrice && (!Number.isFinite(price) || price < 0)) {
-      setErrorMessage("Price phải là số lớn hơn hoặc bằng 0.");
+      setErrorMessage("Price must be greater than or equal to 0.");
       return;
     }
 
     if (!Number.isFinite(stock) || stock < 0) {
-      setErrorMessage("Stock phải là số lớn hơn hoặc bằng 0.");
+      setErrorMessage("Stock must be greater than or equal to 0.");
       return;
     }
 
     if (!vendorEmail) {
-      setErrorMessage("Không tìm thấy thông tin vendor đang đăng nhập.");
+      setErrorMessage("Signed-in vendor information was not found.");
       return;
     }
 
@@ -1700,7 +1613,7 @@ export default function VendorProducts() {
         !selectedThumbnailFile
       ) {
         setErrorMessage(
-          "Bạn cần upload ảnh đại diện cho sản phẩm hoặc nhập link ảnh.",
+          "You need to upload a product thumbnail or enter an image URL.",
         );
         return;
       }
@@ -1733,15 +1646,17 @@ export default function VendorProducts() {
             variantPrice < 0 ||
             (targetStatus === PRODUCT_STATUS.PENDING && variantPrice <= 0)
           ) {
-            throw new Error("Mỗi biến thể cần price lớn hơn 0.");
+            throw new Error("Each variant price must be greater than 0.");
           }
 
           if (!Number.isFinite(variantOldPrice) || variantOldPrice < 0) {
-            throw new Error("oldPrice của biến thể không hợp lệ.");
+            throw new Error("The variant old price is invalid.");
           }
 
           if (!Number.isFinite(variantStock) || variantStock < 0) {
-            throw new Error("stock của biến thể phải lớn hơn hoặc bằng 0.");
+            throw new Error(
+              "The variant stock must be greater than or equal to 0.",
+            );
           }
 
           const normalizedOptionValues = Object.entries(
@@ -1771,7 +1686,7 @@ export default function VendorProducts() {
             normalizedAttributes.colorHex &&
             !isValidHexColorValue(normalizedAttributes.colorHex)
           ) {
-            throw new Error("Color HEX của biến thể không hợp lệ.");
+            throw new Error("The variant Color HEX is invalid.");
           }
 
           const variantSignature = buildVariantSignature(
@@ -1784,7 +1699,7 @@ export default function VendorProducts() {
             variantSignature &&
             variantSignatureRegistry.has(variantSignature)
           ) {
-            throw new Error("Có biến thể bị trùng tổ hợp tùy chọn.");
+            throw new Error("There are duplicate variant option combinations.");
           }
 
           if (variantSignature) {
@@ -1957,7 +1872,7 @@ export default function VendorProducts() {
       ]);
     } catch (error) {
       setErrorMessage(
-        error?.message ?? "Không thể lưu sản phẩm. Vui lòng thử lại.",
+        error?.message ?? "Unable to save the product. Please try again.",
       );
     } finally {
       setSaveIntent("");
@@ -1981,7 +1896,7 @@ export default function VendorProducts() {
       .toLowerCase();
 
     if (action === "delete" && productStatus !== PRODUCT_STATUS.DRAFT) {
-      setErrorMessage("Chỉ có thể xóa sản phẩm ở trạng thái draft.");
+      setErrorMessage("Only draft products can be deleted.");
       return;
     }
 
@@ -1989,7 +1904,9 @@ export default function VendorProducts() {
       ["hide", "show"].includes(action) &&
       productStatus === PRODUCT_STATUS.REJECTED
     ) {
-      setErrorMessage("Sản phẩm đã bị admin từ chối nên không thể ẩn/hiện.");
+      setErrorMessage(
+        "This product was rejected by admin and cannot be shown or hidden.",
+      );
       return;
     }
 
@@ -2039,7 +1956,9 @@ export default function VendorProducts() {
         queryClient.invalidateQueries({ queryKey: ["products", "public"] }),
       ]);
     } catch (error) {
-      setErrorMessage(error?.message ?? "Không thể xử lý action sản phẩm.");
+      setErrorMessage(
+        error?.message ?? "Unable to process the product action.",
+      );
     } finally {
       setProcessingProductId("");
       setIsSaving(false);
@@ -2079,8 +1998,8 @@ export default function VendorProducts() {
             <div>
               <h2>Flash sale dashboard</h2>
               <p>
-                Products added to the current campaign will appear here until the
-                campaign closes.
+                Products added to the current campaign will appear here until
+                the campaign closes.
               </p>
             </div>
             <span>{currentFlashSaleProducts.length} products</span>
@@ -2105,15 +2024,22 @@ export default function VendorProducts() {
               </div>
 
               {currentFlashSaleProducts.map((product, index) => (
-                <div className="vendor-products-table__row" key={`flash-${product.id}`}>
+                <div
+                  className="vendor-products-table__row"
+                  key={`flash-${product.id}`}
+                >
                   <span>{index + 1}</span>
                   <span>
                     <Link to={`/product/${product.id}`} state={{ product }}>
                       {product.title}
                     </Link>
                   </span>
-                  <span>${Number(product.regularPrice ?? product.price ?? 0)}</span>
-                  <span>${Number(product.displayPrice ?? product.price ?? 0)}</span>
+                  <span>
+                    ${Number(product.regularPrice ?? product.price ?? 0)}
+                  </span>
+                  <span>
+                    ${Number(product.displayPrice ?? product.price ?? 0)}
+                  </span>
                   <span>-{Number(product.flashSaleDiscountPercent ?? 0)}%</span>
                   <span>{Number(product.soldCount ?? 0)}</span>
                   <span>
@@ -2147,7 +2073,7 @@ export default function VendorProducts() {
         </section>
       )}
       <section className="vendor-products-card">
-        <h2>{editingId ? "Cập nhật sản phẩm" : "Đăng sản phẩm mới"}</h2>
+        <h2>{editingId ? "Update Product" : "Create Product"}</h2>
         <form onSubmit={handleSubmit}>
           <fieldset className="vendor-products-fieldset" disabled={isSaving}>
             <div className="vendor-products-two-col">
@@ -2228,7 +2154,9 @@ export default function VendorProducts() {
                             }))
                           }
                         />
-                        <span>Add this product to current flash sale campaign</span>
+                        <span>
+                          Add this product to current flash sale campaign
+                        </span>
                       </label>
 
                       {form.flashSaleEnabled && (
@@ -2269,9 +2197,9 @@ export default function VendorProducts() {
                             type="button"
                             className="vendor-products-image-thumb"
                             onClick={handleRequestRemoveExistingThumbnail}
-                            title={`Xóa ảnh ${getStoredImageLabel(
+                            title={`Delete image ${getStoredImageLabel(
                               existingThumbnail,
-                              "Thumbnail hiện tại",
+                              "Current thumbnail",
                             )}`}
                           >
                             <img
@@ -2288,7 +2216,7 @@ export default function VendorProducts() {
                             type="button"
                             className="vendor-products-file-chip"
                             onClick={handleRemoveSelectedThumbnailFile}
-                            title={`Xóa ảnh ${selectedThumbnailFile.name}`}
+                            title={`Delete image ${selectedThumbnailFile.name}`}
                           >
                             {selectedThumbnailFile.name}
                           </button>
@@ -2329,7 +2257,7 @@ export default function VendorProducts() {
                                   index,
                                 )
                               }
-                              title={`Xóa ảnh ${getStoredImageLabel(
+                              title={`Delete image ${getStoredImageLabel(
                                 image,
                                 `Gallery image ${index + 1}`,
                               )}`}
@@ -2353,7 +2281,7 @@ export default function VendorProducts() {
                               onClick={() =>
                                 handleRemoveSelectedGalleryFile(file)
                               }
-                              title={`Xóa ảnh ${file.name}`}
+                              title={`Delete image ${file.name}`}
                             >
                               {file.name}
                             </button>
@@ -2382,7 +2310,7 @@ export default function VendorProducts() {
                       <input
                         name="sizesText"
                         type="text"
-                        placeholder="S, M, L hoặc Standard, Combo..."
+                        placeholder="S, M, L or Standard, Combo..."
                         value={form.sizesText}
                         onChange={handleInputChange}
                       />
@@ -2482,7 +2410,9 @@ export default function VendorProducts() {
                   <div className="vendor-products-variants__header">
                     <div>
                       <strong>Variants</strong>
-                      <p>Dùng Generate variants để sinh nhanh các tổ hợp.</p>
+                      <p>
+                        Use Generate variants to quickly create combinations.
+                      </p>
                     </div>
                   </div>
 
@@ -2758,8 +2688,8 @@ export default function VendorProducts() {
 
               {variantRows.length === 0 ? (
                 <p className="vendor-products-variant-summary__empty">
-                  Chỉnh sửa một sản phẩm hoặc generate biến thể mới để xem danh
-                  sách biến thể của sản phẩm.
+                  Edit a product or generate new variants to view the product's
+                  variant list.
                 </p>
               ) : (
                 <div className="vendor-products-variant-table-wrapper">
@@ -2962,10 +2892,10 @@ export default function VendorProducts() {
         </form>
       </section>
       <section className="vendor-products-card">
-        <h2>Danh sách sản phẩm</h2>
+        <h2>Products List</h2>
 
-        {isLoading && <p>Đang tải dữ liệu...</p>}
-        {isError && <p>Không thể tải danh sách sản phẩm.</p>}
+        {isLoading && <p>Loading data...</p>}
+        {isError && <p>Unable to load the product list.</p>}
 
         {!isLoading && !isError && (
           <div className="vendor-products-table">
@@ -3060,7 +2990,7 @@ export default function VendorProducts() {
                         }
                         title={
                           isRejected
-                            ? "Sản phẩm bị admin từ chối nên không thể ẩn/hiện"
+                            ? "This product was rejected by admin and cannot be shown or hidden"
                             : isInactive
                               ? "Show"
                               : "Hide"
@@ -3084,7 +3014,7 @@ export default function VendorProducts() {
                         title={
                           isDraft
                             ? "Delete"
-                            : "Chỉ có thể xóa sản phẩm ở trạng thái draft"
+                            : "Only draft products can be deleted"
                         }
                         aria-label={
                           isDraft
@@ -3103,13 +3033,13 @@ export default function VendorProducts() {
             {paginatedVendorProducts.length === 0 &&
               vendorProducts.length > 0 && (
                 <p className="vendor-products-empty">
-                  Không có sản phẩm nào ở trang này.
+                  No products are available on this page.
                 </p>
               )}
 
             {vendorProducts.length === 0 && (
               <p className="vendor-products-empty">
-                Bạn chưa có sản phẩm nào. Hãy đăng sản phẩm đầu tiên.
+                You don't have any products yet. Publish your first product.
               </p>
             )}
 
@@ -3151,7 +3081,7 @@ export default function VendorProducts() {
           />
           <div className="vendor-products-modal__card">
             <p className="vendor-products-modal__title">
-              Bạn muốn xóa ảnh này?
+              Do you want to delete this image?
             </p>
             <div className="vendor-products-modal__actions">
               <button
@@ -3159,14 +3089,14 @@ export default function VendorProducts() {
                 className="vendor-products-modal__button vendor-products-modal__button--danger"
                 onClick={handleConfirmImageRemoval}
               >
-                Xóa
+                Delete
               </button>
               <button
                 type="button"
                 className="vendor-products-modal__button vendor-products-modal__button--neutral"
                 onClick={handleCancelImageRemoval}
               >
-                Hủy
+                Cancel
               </button>
             </div>
           </div>

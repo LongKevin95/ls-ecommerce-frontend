@@ -73,7 +73,7 @@ export async function updateProductById(productId, updates = {}) {
   const normalizedProductId = String(productId ?? "").trim();
 
   if (!normalizedProductId) {
-    throw new Error("Không tìm thấy sản phẩm để cập nhật.");
+    throw new Error("Product not found for updating.");
   }
 
   const roles = getCurrentRoles();
@@ -100,7 +100,7 @@ export async function deleteProductById(productId) {
   const normalizedProductId = String(productId ?? "").trim();
 
   if (!normalizedProductId) {
-    throw new Error("Không tìm thấy sản phẩm để xóa.");
+    throw new Error("Product not found for deletion.");
   }
 
   await apiClient.delete(`/vendor/products/${normalizedProductId}`);
@@ -114,22 +114,21 @@ export async function addProductReview(productId, review = {}) {
     throw new Error("Missing product id.");
   }
 
-  const response = await apiClient.post(`/products/${normalizedProductId}/reviews`, {
-    customerName: String(review?.customerName ?? "").trim(),
-    comment: String(review?.comment ?? "").trim(),
-    stars: Math.min(5, Math.max(1, Number(review?.stars ?? 0))),
-  });
+  const response = await apiClient.post(
+    `/products/${normalizedProductId}/reviews`,
+    {
+      customerName: String(review?.customerName ?? "").trim(),
+      comment: String(review?.comment ?? "").trim(),
+      stars: Math.min(5, Math.max(1, Number(review?.stars ?? 0))),
+    },
+  );
 
   return extractApiPayload(response);
 }
 
 export async function upsertVendorReply(
   productId,
-  {
-    reviewCreatedAt,
-    customerEmail,
-    replyText,
-  } = {},
+  { reviewCreatedAt, customerEmail, replyText } = {},
 ) {
   const normalizedProductId = String(productId ?? "").trim();
 

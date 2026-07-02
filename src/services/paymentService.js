@@ -4,7 +4,7 @@ export async function initSePayCheckout(orderId) {
   const normalizedOrderId = String(orderId ?? "").trim();
 
   if (!normalizedOrderId) {
-    throw new Error("Không tìm thấy đơn hàng để khởi tạo thanh toán SePay.");
+    throw new Error("Order not found for initializing SePay payment.");
   }
 
   const response = await apiClient.post("/payments/sepay/init", {
@@ -18,9 +18,11 @@ export async function getOrderPaymentStatus(orderId) {
   const normalizedOrderId = String(orderId ?? "").trim();
 
   if (!normalizedOrderId) {
-    throw new Error("Không tìm thấy đơn hàng để kiểm tra trạng thái thanh toán.");
+    throw new Error("Order not found for checking payment status.");
   }
 
-  const response = await apiClient.get(`/payments/orders/${normalizedOrderId}/status`);
+  const response = await apiClient.get(
+    `/payments/orders/${normalizedOrderId}/status`,
+  );
   return extractApiPayload(response);
 }

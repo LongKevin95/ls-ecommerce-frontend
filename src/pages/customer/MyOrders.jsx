@@ -49,12 +49,12 @@ const ORDER_STATUS_LABELS = {
 };
 
 const PAYMENT_STATUS_LABELS = {
-  unpaid: "Chưa thanh toán",
-  pending: "Chờ thanh toán",
-  paid: "Đã thanh toán",
-  failed: "Thanh toán thất bại",
-  expired: "Thanh toán hết hạn",
-  cancelled: "Thanh toán đã hủy",
+  unpaid: "Unpaid",
+  pending: "Pending Payment",
+  paid: "Paid",
+  failed: "Payment Failed",
+  expired: "Payment Expired",
+  cancelled: "Payment Cancelled",
 };
 
 function normalizeOrderStatus(value) {
@@ -104,7 +104,9 @@ function getPaymentStatusLabel(status) {
     .trim()
     .toLowerCase();
 
-  return PAYMENT_STATUS_LABELS[normalizedStatus] ?? PAYMENT_STATUS_LABELS.unpaid;
+  return (
+    PAYMENT_STATUS_LABELS[normalizedStatus] ?? PAYMENT_STATUS_LABELS.unpaid
+  );
 }
 
 function buildShopList(orderItems, vendorMapByEmail) {
@@ -174,7 +176,7 @@ function buildOrderItemVariantText(item) {
   }
 
   return [
-    item?.color ? `Màu ${item.color}` : null,
+    item?.color ? `Color ${item.color}` : null,
     item?.size ? `Size ${item.size}` : null,
     item?.sku ? `SKU ${item.sku}` : null,
   ]
@@ -215,7 +217,7 @@ function buildReviewableItems(orderItems, productsById, customerEmail) {
     uniqueReviewItems.set(reviewKey, {
       reviewKey,
       productId,
-      title: orderItem?.title || product?.title || "Sản phẩm",
+      title: orderItem?.title || product?.title || "Product",
       image: orderItem?.image || product?.image || "/favicon.svg",
       variantLabel: buildOrderItemVariantText(orderItem),
       isAvailable: Boolean(productId && product),
@@ -463,7 +465,7 @@ export default function MyOrders() {
 
       await queryClient.invalidateQueries({ queryKey: ["orders"] });
     } catch (error) {
-      window.alert(error?.message ?? "Khong the huy don hang.");
+      window.alert(error?.message ?? "Unable to cancel the order.");
     } finally {
       setProcessingOrderId("");
     }
@@ -504,29 +506,31 @@ export default function MyOrders() {
     event.preventDefault();
 
     if (!user) {
-      window.alert("Vui lòng đăng nhập để đánh giá sản phẩm.");
+      window.alert("Please sign in to review the product.");
       return;
     }
 
     if (!selectedReviewItem?.productId) {
-      window.alert("Không tìm thấy sản phẩm để đánh giá.");
+      window.alert("Product not found for review.");
       return;
     }
 
     if (!selectedReviewItem.isAvailable) {
-      window.alert("Sản phẩm này hiện không còn khả dụng để gửi đánh giá.");
+      window.alert(
+        "This product is currently unavailable for review submission.",
+      );
       return;
     }
 
     if (selectedReviewItem.isReviewed) {
-      window.alert("Bạn đã đánh giá sản phẩm này rồi.");
+      window.alert("You have already reviewed this product.");
       return;
     }
 
     const trimmedComment = reviewComment.trim();
 
     if (!trimmedComment) {
-      window.alert("Vui lòng nhập bình luận trước khi gửi.");
+      window.alert("Please enter a comment before submitting.");
       return;
     }
 
@@ -556,7 +560,7 @@ export default function MyOrders() {
       setReviewComment("");
       setReviewStars(5);
       setReviewFeedbackMessage(
-        "Đánh giá của bạn đã được lưu và hiển thị ngay trên sản phẩm.",
+        "Your review has been saved and is now visible on the product page.",
       );
 
       if (nextReviewItem) {
@@ -565,7 +569,7 @@ export default function MyOrders() {
 
       await queryClient.invalidateQueries({ queryKey: ["products"] });
     } catch (error) {
-      window.alert(error?.message ?? "Không thể gửi đánh giá.");
+      window.alert(error?.message ?? "Unable to submit the review.");
     } finally {
       setProcessingReviewItemKey("");
     }
@@ -579,21 +583,21 @@ export default function MyOrders() {
         <nav className="my-orders-breadcrumb" aria-label="Breadcrumb">
           <Link to="/">Home</Link>
           <span>&gt;</span>
-          <strong>Đơn mua</strong>
+          <strong>My Orders</strong>
         </nav>
 
         <section className="my-orders-panel">
           <div className="my-orders-header-wrapper">
             <div>
-              <h1>Đơn hàng của bạn</h1>
+              <h1>Your Orders</h1>
               <p>
-                Theo dõi trạng thái đơn, xem nhanh sản phẩm và hủy đơn khi còn
-                có thể.
+                Track order status, quickly review products, and cancel orders
+                when eligible.
               </p>
             </div>
             <div className="my-orders-hero__stat">
               <strong>{myOrders.length}</strong>
-              <span>đơn hàng</span>
+              <span>orders</span>
             </div>
           </div>
           <div className="my-orders-toolbar">
@@ -607,7 +611,7 @@ export default function MyOrders() {
               <input
                 id="my-orders-search-input"
                 type="search"
-                placeholder="Tìm mã đơn, shop hoặc sản phẩm"
+                placeholder="Search by order ID, shop, or product"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
               />
@@ -642,20 +646,20 @@ export default function MyOrders() {
 
           {isPageLoading ? (
             <section className="my-orders-loading" aria-live="polite">
-              <p>Đang tải đơn hàng...</p>
+              <p>Loading orders...</p>
             </section>
           ) : myOrders.length === 0 ? (
             <div className="my-orders-empty-state">
               <div className="my-orders-empty-state__icon" aria-hidden="true">
                 🛍️
               </div>
-              <h2>Bạn chưa có đơn hàng nào</h2>
-              <p>Hãy mua sắm để các đơn hàng của bạn xuất hiện tại đây.</p>
+              <h2>You don't have any orders yet</h2>
+              <p>Start shopping to see your orders appear here.</p>
               <Link
                 to="/"
                 className="my-orders-button my-orders-button--primary"
               >
-                Mua sắm ngay
+                Shop Now
               </Link>
             </div>
           ) : visibleOrders.length === 0 ? (
@@ -663,8 +667,11 @@ export default function MyOrders() {
               <div className="my-orders-empty-state__icon" aria-hidden="true">
                 🔎
               </div>
-              <h2>Không tìm thấy đơn hàng phù hợp</h2>
-              <p>Thử đổi tab hoặc xóa từ khóa tìm kiếm để xem các đơn khác.</p>
+              <h2>No matching orders found</h2>
+              <p>
+                Try changing the tab or clearing the search term to see other
+                orders.
+              </p>
               <button
                 type="button"
                 className="my-orders-button my-orders-button--secondary"
@@ -673,7 +680,7 @@ export default function MyOrders() {
                   setSearchTerm("");
                 }}
               >
-                Xóa bộ lọc
+                Clear Filters
               </button>
             </div>
           ) : (
@@ -728,11 +735,11 @@ export default function MyOrders() {
                           <div className="my-orders-card__shop-line">
                             <strong>{order.firstShopName}</strong>
                             <Link to={shopHref} className="my-orders-shop-link">
-                              Xem shop
+                              View Shop
                             </Link>
                           </div>
                           <p>
-                            Đơn hàng {orderId} · {order.displayDate}
+                            Order {orderId} · {order.displayDate}
                           </p>
                         </div>
                       </div>
@@ -747,7 +754,8 @@ export default function MyOrders() {
                     {order.paymentMethod === "sepay" ? (
                       <div className="my-orders-card__note">
                         <p>
-                          Trạng thái thanh toán: <strong>{order.paymentStatusLabel}</strong>
+                          Payment status:{" "}
+                          <strong>{order.paymentStatusLabel}</strong>
                           {order.paidAt ? ` · ${formatDate(order.paidAt)}` : ""}
                         </p>
                       </div>
@@ -781,9 +789,7 @@ export default function MyOrders() {
                             <div className="my-orders-item__content">
                               <h3>{item?.title || "Product"}</h3>
                               <div className="my-orders-item__meta">
-                                <span>
-                                  {itemVariant || "Phân loại mặc định"}
-                                </span>
+                                <span>{itemVariant || "Default variant"}</span>
                                 <span>x{safeQuantity}</span>
                               </div>
                             </div>
@@ -797,7 +803,7 @@ export default function MyOrders() {
 
                       {order.hiddenItemsCount > 0 ? (
                         <p className="my-orders-card__more-items">
-                          +{order.hiddenItemsCount} sản phẩm khác
+                          +{order.hiddenItemsCount} more items
                         </p>
                       ) : null}
                     </div>
@@ -807,44 +813,44 @@ export default function MyOrders() {
                         {isCancelled ? (
                           <>
                             <span className="my-orders-card__note-label">
-                              Đã hủy
+                              Cancelled
                             </span>
                             <p>
                               {order.cancellationReason ||
-                                "Đơn hàng đã được hủy."}
+                                "The order has been cancelled."}
                             </p>
                             {order.cancellationAt ? (
                               <small>
-                                Hủy lúc {formatDate(order.cancellationAt)}
+                                Cancelled at {formatDate(order.cancellationAt)}
                               </small>
                             ) : null}
                           </>
                         ) : isCompleted ? (
                           <p>
-                            Đơn hàng đã hoàn tất. Bạn có thể xem lại bất cứ lúc
-                            nào.
+                            This order has been completed. You can review it at
+                            any time.
                           </p>
                         ) : order.paymentMethod === "sepay" &&
                           order.paymentStatus === "paid" ? (
                           <p>
-                            Đơn hàng đã được thanh toán thành công qua SePay và đang
-                            chờ shop xác nhận xử lý.
+                            This order was successfully paid via SePay and is
+                            waiting for the shop to confirm processing.
                           </p>
                         ) : order.status === "pending" ? (
                           <p>
-                            Đơn đang ở trạng thái chờ xác nhận. Bạn có thể hủy
-                            đơn trong giai đoạn này.
+                            The order is pending confirmation. You can cancel it
+                            during this stage.
                           </p>
                         ) : order.canRetryPayment ? (
                           <p>
-                            Thanh toán SePay của đơn này đang ở trạng thái{" "}
-                            {order.paymentStatus}. Bạn có thể tiếp tục thanh toán.
+                            The SePay payment for this order is currently{" "}
+                            {order.paymentStatus}. You can continue the payment.
                           </p>
                         ) : (
                           <p>
-                            Đơn đang ở trạng thái{" "}
-                            {order.statusLabel.toLowerCase()}. Đơn này không thể
-                            hủy từ trang này.
+                            This order is currently{" "}
+                            {order.statusLabel.toLowerCase()}. It cannot be
+                            cancelled from this page.
                           </p>
                         )}
 
@@ -854,12 +860,12 @@ export default function MyOrders() {
                             htmlFor={`cancel-${order.orderId}`}
                           >
                             <div className="my-orders-cancel__header">
-                              <span>Lý do hủy đơn</span>
+                              <span>Cancellation Reason</span>
                             </div>
                             <textarea
                               id={`cancel-${order.orderId}`}
                               rows="2"
-                              placeholder="Nhập lý do hủy đơn"
+                              placeholder="Enter cancellation reason"
                               ref={(element) => {
                                 if (element) {
                                   cancelReasonInputRefs.current[order.orderId] =
@@ -906,7 +912,7 @@ export default function MyOrders() {
 
                       <div className="my-orders-card__summary">
                         <div className="my-orders-card__total">
-                          <span>Tổng thanh toán</span>
+                          <span>Total Payment</span>
                           <strong>{currency.format(order.orderTotal)}</strong>
                         </div>
 
@@ -918,7 +924,7 @@ export default function MyOrders() {
                               disabled={order.reviewableItems.length === 0}
                               onClick={() => handleOpenReviewModal(order)}
                             >
-                              Đánh giá
+                              Review
                             </button>
                           ) : null}
 
@@ -926,7 +932,7 @@ export default function MyOrders() {
                             to={shopHref}
                             className="my-orders-button my-orders-button--secondary"
                           >
-                            Xem shop
+                            View Shop
                           </Link>
 
                           {order.canRetryPayment ? (
@@ -934,7 +940,7 @@ export default function MyOrders() {
                               to={`/payment/result?result=pending&provider=sepay&orderId=${encodeURIComponent(order.orderId)}`}
                               className="my-orders-button my-orders-button--primary"
                             >
-                              Tiếp tục thanh toán
+                              Continue Payment
                             </Link>
                           ) : null}
 
@@ -945,7 +951,7 @@ export default function MyOrders() {
                               disabled={isCancelling}
                               onClick={() => handleCustomerCancelOrder(order)}
                             >
-                              {isCancelling ? "Đang hủy..." : "Hủy đơn"}
+                              {isCancelling ? "Cancelling..." : "Cancel Order"}
                             </button>
                           ) : null}
                         </div>
@@ -973,16 +979,16 @@ export default function MyOrders() {
           >
             <div className="my-orders-review-modal__header">
               <div>
-                <p>Đơn hàng {activeReviewOrder.orderId || "N/A"}</p>
+                <p>Order {activeReviewOrder.orderId || "N/A"}</p>
                 <h2 id="my-orders-review-modal-title">
-                  Đánh giá sản phẩm đã mua
+                  Review Purchased Products
                 </h2>
               </div>
               <button
                 type="button"
                 className="my-orders-review-modal__close"
                 onClick={handleCloseReviewModal}
-                aria-label="Đóng popup đánh giá"
+                aria-label="Close review modal"
               >
                 ×
               </button>
@@ -990,7 +996,7 @@ export default function MyOrders() {
 
             {activeReviewOrder.reviewableItems.length === 0 ? (
               <p className="my-orders-review-modal__empty">
-                Không tìm thấy sản phẩm phù hợp để đánh giá trong đơn này.
+                No eligible products were found for review in this order.
               </p>
             ) : (
               <div className="my-orders-review-modal__content">
@@ -1017,17 +1023,15 @@ export default function MyOrders() {
 
                         <div className="my-orders-review-item__content">
                           <strong>{item.title}</strong>
-                          <span>
-                            {item.variantLabel || "Phân loại mặc định"}
-                          </span>
+                          <span>{item.variantLabel || "Default variant"}</span>
                         </div>
 
                         <span className="my-orders-review-item__badge">
                           {item.isReviewed
-                            ? "Đã đánh giá"
+                            ? "Reviewed"
                             : item.isAvailable
-                              ? "Chưa đánh giá"
-                              : "Không khả dụng"}
+                              ? "Not Reviewed"
+                              : "Unavailable"}
                         </span>
                       </button>
                     );
@@ -1038,7 +1042,7 @@ export default function MyOrders() {
                   className="product-review-form my-orders-review-form"
                   onSubmit={handleSubmitReview}
                 >
-                  <h4>Viết đánh giá</h4>
+                  <h4>Write a Review</h4>
 
                   {reviewFeedbackMessage ? (
                     <p className="product-review-feedback" role="status">
@@ -1062,8 +1066,7 @@ export default function MyOrders() {
                       <div className="my-orders-review-form__product-copy">
                         <strong>{selectedReviewItem.title}</strong>
                         <span>
-                          {selectedReviewItem.variantLabel ||
-                            "Phân loại mặc định"}
+                          {selectedReviewItem.variantLabel || "Default variant"}
                         </span>
                       </div>
                     </div>
@@ -1071,20 +1074,21 @@ export default function MyOrders() {
 
                   {!user ? (
                     <p className="product-review-note">
-                      Đăng nhập để đánh giá sản phẩm.
+                      Sign in to review this product.
                     </p>
                   ) : selectedReviewItem?.isReviewed ? (
                     <p className="product-review-note">
-                      Bạn đã đánh giá sản phẩm này rồi, mỗi tài khoản chỉ review
-                      1 lần cho mỗi sản phẩm.
+                      You have already reviewed this product. Each account can
+                      only review a product once.
                     </p>
                   ) : !selectedReviewItem?.isAvailable ? (
                     <p className="product-review-note">
-                      Sản phẩm này hiện không còn khả dụng để gửi đánh giá.
+                      This product is currently unavailable for review
+                      submission.
                     </p>
                   ) : (
                     <p className="product-review-note">
-                      Đánh giá của bạn sẽ hiển thị tại trang chi tiết sản phẩm.
+                      Your review will be displayed on the product detail page.
                     </p>
                   )}
 
@@ -1113,10 +1117,10 @@ export default function MyOrders() {
                       onChange={(event) => setReviewComment(event.target.value)}
                       placeholder={
                         canSubmitSelectedReview
-                          ? "Chia sẻ trải nghiệm của bạn..."
+                          ? "Share your experience..."
                           : selectedReviewItem?.isReviewed
-                            ? "Bạn đã gửi review cho sản phẩm này"
-                            : "Sản phẩm này hiện chưa thể đánh giá"
+                            ? "You have already submitted a review for this product"
+                            : "This product cannot be reviewed right now"
                       }
                       disabled={!canSubmitSelectedReview || isSubmittingReview}
                     />
@@ -1128,14 +1132,14 @@ export default function MyOrders() {
                       className="my-orders-button my-orders-button--secondary"
                       onClick={handleCloseReviewModal}
                     >
-                      Đóng
+                      Close
                     </button>
                     <button
                       type="submit"
                       className="product-review-form__submit"
                       disabled={!canSubmitSelectedReview || isSubmittingReview}
                     >
-                      {isSubmittingReview ? "Đang gửi..." : "Gửi đánh giá"}
+                      {isSubmittingReview ? "Submitting..." : "Submit Review"}
                     </button>
                   </div>
                 </form>

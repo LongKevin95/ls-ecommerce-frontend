@@ -135,16 +135,17 @@ export default function Wishlist() {
       <div className="wishlist-header">
         <div className="wishlist-header__copy">
           <p>Wishlist</p>
-          <h1>Sản phẩm bạn đã lưu</h1>
+          <h1>Saved Products</h1>
           <span>
-            Theo dõi nhanh các món muốn mua lại hoặc chuyển thẳng vào giỏ hàng.
+            Quickly track the items you want to buy again or move straight to
+            the cart.
           </span>
         </div>
 
         <div className="wishlist-header__actions">
           <div className="wishlist-header__stat">
             <strong>{enrichedItems.length}</strong>
-            <span>sản phẩm</span>
+            <span>products</span>
           </div>
 
           {enrichedItems.length > 0 && (
@@ -153,7 +154,7 @@ export default function Wishlist() {
               className="wishlist-clear-btn"
               onClick={handleClearWishlist}
             >
-              Xóa tất cả
+              Clear All
             </button>
           )}
         </div>
@@ -164,9 +165,9 @@ export default function Wishlist() {
           <div className="wishlist-empty__icon" aria-hidden="true">
             ♥
           </div>
-          <h2>Wishlist của bạn đang trống</h2>
-          <p>Lưu sản phẩm bạn thích để xem lại nhanh hơn khi cần.</p>
-          <Link to="/">Tiếp tục mua sắm</Link>
+          <h2>Your wishlist is empty</h2>
+          <p>Save products you like to find them again more quickly later.</p>
+          <Link to="/">Continue Shopping</Link>
         </div>
       ) : (
         <section className="wishlist-grid">
@@ -215,14 +216,14 @@ export default function Wishlist() {
                       className="wishlist-card__move"
                       onClick={() => handleMoveToCart(item)}
                     >
-                      Chuyển vào giỏ
+                      Move to Cart
                     </button>
                     <button
                       type="button"
                       className="wishlist-card__remove"
                       onClick={() => handleRemoveWishlistItem(item.productId)}
                     >
-                      Xóa
+                      Delete
                     </button>
                   </div>
                 </div>

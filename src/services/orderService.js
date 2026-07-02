@@ -84,7 +84,7 @@ export async function updateOrderStatus(orderId, nextStatus, reason = "") {
   const normalizedOrderId = String(orderId ?? "").trim();
 
   if (!normalizedOrderId) {
-    throw new Error("Không tìm thấy đơn hàng để cập nhật.");
+    throw new Error("Order not found for updating.");
   }
 
   const route = getCurrentRoles().includes("admin")
@@ -103,16 +103,19 @@ export async function cancelMyOrder(orderId, reason) {
   const normalizedReason = String(reason ?? "").trim();
 
   if (!normalizedOrderId) {
-    throw new Error("KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng Ä‘á»ƒ há»§y.");
+    throw new Error("Order not found for cancellation.");
   }
 
   if (!normalizedReason) {
-    throw new Error("Vui lÃ²ng nháº­p lÃ½ do huá»· Ä‘Æ¡n.");
+    throw new Error("Please enter a cancellation reason.");
   }
 
-  const response = await apiClient.patch(`/orders/${normalizedOrderId}/cancel`, {
-    reason: normalizedReason,
-  });
+  const response = await apiClient.patch(
+    `/orders/${normalizedOrderId}/cancel`,
+    {
+      reason: normalizedReason,
+    },
+  );
 
   return normalizeOrder(extractApiPayload(response));
 }

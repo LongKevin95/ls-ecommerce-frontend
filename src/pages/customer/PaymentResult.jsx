@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { getOrderPaymentStatus, initSePayCheckout } from "../../api/paymentsApi";
+import {
+  getOrderPaymentStatus,
+  initSePayCheckout,
+} from "../../api/paymentsApi";
 import "./PaymentResult.css";
 
 const currency = new Intl.NumberFormat("vi-VN", {
@@ -12,14 +15,17 @@ const currency = new Intl.NumberFormat("vi-VN", {
 
 function submitHostedPaymentForm(checkoutForm) {
   const actionUrl = String(checkoutForm?.actionUrl ?? "").trim();
-  const method = String(checkoutForm?.method ?? "POST").trim().toUpperCase() || "POST";
+  const method =
+    String(checkoutForm?.method ?? "POST")
+      .trim()
+      .toUpperCase() || "POST";
   const fields =
     checkoutForm?.fields && typeof checkoutForm.fields === "object"
       ? checkoutForm.fields
       : {};
 
   if (!actionUrl) {
-    throw new Error("Không thể chuyển hướng tới cổng thanh toán SePay.");
+    throw new Error("Unable to redirect to the SePay payment gateway.");
   }
 
   const form = document.createElement("form");
@@ -43,50 +49,54 @@ function submitHostedPaymentForm(checkoutForm) {
 function getPresentation(paymentStatus, requestedResult) {
   if (paymentStatus === "paid") {
     return {
-      title: "Thanh toán thành công",
-      description: "SePay đã xác nhận giao dịch thành công cho đơn hàng của bạn.",
+      title: "Payment Successful",
+      description:
+        "SePay has confirmed a successful transaction for your order.",
       tone: "success",
     };
   }
 
   if (paymentStatus === "pending") {
     return {
-      title: "Đang chờ xác nhận thanh toán",
+      title: "Waiting for Payment Confirmation",
       description:
         requestedResult === "success"
-          ? "Bạn đã quay lại từ SePay. Hệ thống đang chờ webhook xác nhận giao dịch."
-          : "Phiên thanh toán đang chờ hoàn tất hoặc SePay chưa gửi webhook xác nhận.",
+          ? "You have returned from SePay. The system is waiting for webhook confirmation of the transaction."
+          : "The payment session is still pending completion or SePay has not sent the confirmation webhook yet.",
       tone: "pending",
     };
   }
 
   if (paymentStatus === "failed") {
     return {
-      title: "Thanh toán chưa thành công",
-      description: "Giao dịch SePay đã thất bại hoặc bị từ chối. Bạn có thể thử lại.",
+      title: "Payment Failed",
+      description:
+        "The SePay transaction failed or was rejected. You can try again.",
       tone: "error",
     };
   }
 
   if (paymentStatus === "expired") {
     return {
-      title: "Phiên thanh toán đã hết hạn",
-      description: "Đơn hàng này đã hết hạn thanh toán online. Vui lòng tạo đơn mới nếu cần.",
+      title: "Payment Session Expired",
+      description:
+        "This order has expired for online payment. Please create a new order if needed.",
       tone: "error",
     };
   }
 
   if (requestedResult === "cancel") {
     return {
-      title: "Bạn đã hủy thanh toán",
-      description: "Bạn có thể quay lại để tiếp tục thanh toán khi sẵn sàng.",
+      title: "Payment Cancelled",
+      description:
+        "You can come back and continue the payment when you're ready.",
       tone: "warning",
     };
   }
 
   return {
-    title: "Trạng thái thanh toán",
-    description: "Hệ thống đang đồng bộ thông tin thanh toán từ SePay.",
+    title: "Payment Status",
+    description: "The system is syncing payment information from SePay.",
     tone: "pending",
   };
 }
@@ -105,7 +115,7 @@ export default function PaymentResult() {
 
   useEffect(() => {
     if (!orderId) {
-      setErrorMessage("Không tìm thấy mã đơn hàng để kiểm tra thanh toán.");
+      setErrorMessage("Order ID not found for payment verification.");
       setIsLoading(false);
       return;
     }
@@ -127,7 +137,11 @@ export default function PaymentResult() {
 
         if (
           shouldContinuePolling &&
-          ["pending"].includes(String(nextState?.paymentStatus ?? "").trim().toLowerCase())
+          ["pending"].includes(
+            String(nextState?.paymentStatus ?? "")
+              .trim()
+              .toLowerCase(),
+          )
         ) {
           pollTimeout = window.setTimeout(() => {
             void fetchStatus(true);
@@ -139,7 +153,8 @@ export default function PaymentResult() {
         }
 
         setErrorMessage(
-          error?.message ?? "Không thể lấy trạng thái thanh toán của đơn hàng này.",
+          error?.message ??
+            "Unable to retrieve the payment status for this order.",
         );
         setIsLoading(false);
       }
@@ -179,7 +194,7 @@ export default function PaymentResult() {
       submitHostedPaymentForm(paymentSession?.checkoutForm);
     } catch (error) {
       setErrorMessage(
-        error?.message ?? "Không thể khởi tạo lại phiên thanh toán SePay.",
+        error?.message ?? "Unable to reinitialize the SePay payment session.",
       );
     } finally {
       setIsRetrying(false);
@@ -188,44 +203,53 @@ export default function PaymentResult() {
 
   return (
     <main className="payment-result-page o-container">
-      <section className={`payment-result-card payment-result-card--${presentation.tone}`}>
+      <section
+        className={`payment-result-card payment-result-card--${presentation.tone}`}
+      >
         <span className="payment-result-card__eyebrow">SePay Payment</span>
         <h1>{presentation.title}</h1>
         <p>{presentation.description}</p>
 
         {isLoading ? (
           <div className="payment-result-loading" aria-live="polite">
-            <span className="payment-result-loading__spinner" aria-hidden="true" />
-            <span>Đang kiểm tra trạng thái thanh toán...</span>
+            <span
+              className="payment-result-loading__spinner"
+              aria-hidden="true"
+            />
+            <span>Checking payment status...</span>
           </div>
         ) : null}
 
-        {errorMessage ? <div className="payment-result-alert">{errorMessage}</div> : null}
+        {errorMessage ? (
+          <div className="payment-result-alert">{errorMessage}</div>
+        ) : null}
 
         {paymentState ? (
           <dl className="payment-result-summary">
             <div>
-              <dt>Mã đơn hàng</dt>
+              <dt>Order ID</dt>
               <dd>{paymentState.orderId || "N/A"}</dd>
             </div>
             <div>
-              <dt>Phương thức</dt>
-              <dd>{paymentState.paymentMethod === "sepay" ? "SePay" : "COD"}</dd>
+              <dt>Method</dt>
+              <dd>
+                {paymentState.paymentMethod === "sepay" ? "SePay" : "COD"}
+              </dd>
             </div>
             <div>
-              <dt>Trạng thái thanh toán</dt>
+              <dt>Payment Status</dt>
               <dd>{paymentState.paymentStatus || "N/A"}</dd>
             </div>
             <div>
-              <dt>Số tiền</dt>
+              <dt>Amount</dt>
               <dd>{currency.format(Number(paymentState.total ?? 0))}</dd>
             </div>
             <div>
-              <dt>Mã thanh toán</dt>
+              <dt>Payment Code</dt>
               <dd>{paymentState.paymentCode || "N/A"}</dd>
             </div>
             <div>
-              <dt>Mã invoice</dt>
+              <dt>Invoice Number</dt>
               <dd>{paymentState.paymentInvoiceNumber || "N/A"}</dd>
             </div>
           </dl>
@@ -239,7 +263,7 @@ export default function PaymentResult() {
               onClick={() => void handleRetryPayment()}
               disabled={isRetrying}
             >
-              {isRetrying ? "Đang chuyển tới SePay..." : "Thanh toán lại với SePay"}
+              {isRetrying ? "Redirecting to SePay..." : "Pay Again with SePay"}
             </button>
           ) : null}
 
@@ -247,11 +271,14 @@ export default function PaymentResult() {
             to="/my-orders"
             className="payment-result-button payment-result-button--secondary"
           >
-            Xem đơn hàng của tôi
+            View My Orders
           </Link>
 
-          <Link to="/" className="payment-result-button payment-result-button--ghost">
-            Về trang chủ
+          <Link
+            to="/"
+            className="payment-result-button payment-result-button--ghost"
+          >
+            Back to Home
           </Link>
         </div>
       </section>

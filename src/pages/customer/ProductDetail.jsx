@@ -111,7 +111,11 @@ function findBestMatchingVariant(
   const normalizedFieldValue = normalizeOptionValue(targetFieldValue);
   const variantList = Array.isArray(variants) ? variants : [];
 
-  if (!normalizedFieldKey || !normalizedFieldValue || variantList.length === 0) {
+  if (
+    !normalizedFieldKey ||
+    !normalizedFieldValue ||
+    variantList.length === 0
+  ) {
     return null;
   }
 
@@ -126,15 +130,19 @@ function findBestMatchingVariant(
         Number(variant?.stock ?? 0) > 0 &&
         variantMatchesSelections(variant, nextSelections),
     ) ??
-    variantList.find((variant) => variantMatchesSelections(variant, nextSelections)) ??
-    variantList.find(
-      (variant) =>
-        Number(variant?.stock ?? 0) > 0 &&
-        getVariantOptionValue(variant, normalizedFieldKey) === normalizedFieldValue,
+    variantList.find((variant) =>
+      variantMatchesSelections(variant, nextSelections),
     ) ??
     variantList.find(
       (variant) =>
-        getVariantOptionValue(variant, normalizedFieldKey) === normalizedFieldValue,
+        Number(variant?.stock ?? 0) > 0 &&
+        getVariantOptionValue(variant, normalizedFieldKey) ===
+          normalizedFieldValue,
+    ) ??
+    variantList.find(
+      (variant) =>
+        getVariantOptionValue(variant, normalizedFieldKey) ===
+        normalizedFieldValue,
     ) ??
     null
   );
@@ -295,7 +303,8 @@ function ProductDetail() {
   } = useQuery({
     queryKey: ["products", "detail", String(id ?? "")],
     queryFn: () => getProductById(id),
-    enabled: Boolean(id) && !(canInspectHiddenProducts && resolvedProductFromLists),
+    enabled:
+      Boolean(id) && !(canInspectHiddenProducts && resolvedProductFromLists),
     staleTime: 1000 * 60 * 5,
   });
 
@@ -319,7 +328,8 @@ function ProductDetail() {
     () =>
       Object.fromEntries(
         Object.entries(selectedVariant?.optionValues ?? {}).filter(
-          ([key, value]) => normalizeOptionValue(key) && normalizeOptionValue(value),
+          ([key, value]) =>
+            normalizeOptionValue(key) && normalizeOptionValue(value),
         ),
       ),
     [selectedVariant],
@@ -422,7 +432,9 @@ function ProductDetail() {
   const isCustomerAccount = isCustomer && !isVendor;
   const canPurchase = isCustomerAccount;
   const isFashionProduct = ["fashion-nam", "fashion-nu"].includes(
-    String(product?.category ?? "").trim().toLowerCase(),
+    String(product?.category ?? "")
+      .trim()
+      .toLowerCase(),
   );
   const vendorShopLabel =
     product?.shopName ||
@@ -478,7 +490,11 @@ function ProductDetail() {
       const normalizedFieldKey = String(fieldKey ?? "").trim();
       const normalizedFieldValue = normalizeOptionValue(fieldValue);
 
-      if (!normalizedFieldKey || !normalizedFieldValue || productVariants.length === 0) {
+      if (
+        !normalizedFieldKey ||
+        !normalizedFieldValue ||
+        productVariants.length === 0
+      ) {
         return;
       }
 
@@ -513,7 +529,7 @@ function ProductDetail() {
 
     if (!canPurchase) {
       window.alert(
-        "Chi tai khoan customer moi co the mua hang, them gio va wishlist.",
+        "Only customer accounts can purchase items, add to cart, and use the wishlist.",
       );
       return false;
     }
@@ -525,7 +541,7 @@ function ProductDetail() {
     if (!requireCustomerAccess()) return;
 
     if (isOutOfStock) {
-      window.alert("Sản phẩm hiện đang hết hàng.");
+      window.alert("This product is currently out of stock.");
       return;
     }
 
@@ -538,14 +554,14 @@ function ProductDetail() {
       size: selectedSize,
     });
 
-    window.alert("Đã thêm vào giỏ hàng.");
+    window.alert("Added to cart.");
   };
 
   const handleBuyNow = () => {
     if (!requireCustomerAccess()) return;
 
     if (isOutOfStock) {
-      window.alert("Sản phẩm hiện đang hết hàng.");
+      window.alert("This product is currently out of stock.");
       return;
     }
 
@@ -566,11 +582,9 @@ function ProductDetail() {
 
     try {
       const added = await toggleWishlistItem(product);
-      window.alert(
-        added ? "Đã thêm vào wishlist." : "Đã xóa khỏi wishlist.",
-      );
+      window.alert(added ? "Added to wishlist." : "Removed from wishlist.");
     } catch (error) {
-      window.alert(error?.message ?? "Khong the cap nhat wishlist.");
+      window.alert(error?.message ?? "Unable to update wishlist.");
     }
   };
 
@@ -583,7 +597,7 @@ function ProductDetail() {
     const replyText = String(replyTextByReview[reviewKey] ?? "").trim();
 
     if (!replyText) {
-      window.alert("Vui long nhap noi dung phan hoi.");
+      window.alert("Please enter a reply message.");
       return;
     }
 
@@ -607,7 +621,7 @@ function ProductDetail() {
 
       await queryClient.invalidateQueries({ queryKey: ["products"] });
     } catch (error) {
-      window.alert(error?.message ?? "Khong the gui phan hoi.");
+      window.alert(error?.message ?? "Unable to send the reply.");
     } finally {
       setProcessingReplyKey("");
     }
@@ -667,20 +681,20 @@ function ProductDetail() {
                     ({product.reviews || 0} Reviews)
                   </span>
                   <span className="rating-count">
-                    Da ban {Number(product?.soldCount ?? 0)}
+                    Sold {Number(product?.soldCount ?? 0)}
                   </span>
                   <span
                     className={`stock-state ${
                       isOutOfStock ? "stock-state--out" : "stock-state--in"
                     }`}
                   >
-                    {isOutOfStock ? "Hết hàng" : "Còn hàng"}
+                    {isOutOfStock ? "Out of stock" : "In stock"}
                   </span>
                 </div>
 
                 {(isDetailLoading || isPrimaryProductLoading) && (
                   <p className="product-detail-helper">
-                    Đang tải thông tin biến thể...
+                    Loading variant details...
                   </p>
                 )}
 
@@ -689,10 +703,12 @@ function ProductDetail() {
                     {currency.format(activePrice)}
                   </div>
 
-                    {activeDiscountPercentage > 0 && (
-                      <span className="product-info__sale-badge">
-                        {activePriceState.isFlashSaleActive ? "Flash Sale" : "Sale"} -
-                      {activeDiscountPercentage}%
+                  {activeDiscountPercentage > 0 && (
+                    <span className="product-info__sale-badge">
+                      {activePriceState.isFlashSaleActive
+                        ? "Flash Sale"
+                        : "Sale"}{" "}
+                      -{activeDiscountPercentage}%
                     </span>
                   )}
                 </div>
@@ -725,7 +741,8 @@ function ProductDetail() {
                 {productVariants.length > 0 &&
                   variantOptionGroups.map((group) => {
                     const isColorGroup = group.key === "color";
-                    const isSizeGroup = isFashionProduct && group.key === "size";
+                    const isSizeGroup =
+                      isFashionProduct && group.key === "size";
                     const groupLabel = String(
                       group.label ?? group.key ?? "Option",
                     ).trim();
@@ -733,7 +750,9 @@ function ProductDetail() {
                     return (
                       <div
                         className={`option-row ${
-                          isColorGroup ? "option-row--colors" : "option-row--stacked"
+                          isColorGroup
+                            ? "option-row--colors"
+                            : "option-row--stacked"
                         }`}
                         key={group.key}
                       >
@@ -750,30 +769,38 @@ function ProductDetail() {
                                 optionValue,
                               );
                               const isAvailable = Boolean(matchedVariant);
-                              const swatchColor = getVariantColorHex(matchedVariant);
+                              const swatchColor =
+                                getVariantColorHex(matchedVariant);
                               const hasColorSwatch = Boolean(swatchColor);
 
                               return (
                                 <button
                                   key={optionValue}
                                   type="button"
-                                  className={hasColorSwatch
-                                    ? `color-option ${isActive ? "is-active" : ""}`
-                                    : `color-option-label ${isActive ? "is-active" : ""}`}
+                                  className={
+                                    hasColorSwatch
+                                      ? `color-option ${isActive ? "is-active" : ""}`
+                                      : `color-option-label ${isActive ? "is-active" : ""}`
+                                  }
                                   style={
                                     hasColorSwatch
                                       ? { "--swatch-color": swatchColor }
                                       : undefined
                                   }
                                   onClick={() =>
-                                    handleVariantOptionSelect(group.key, optionValue)
+                                    handleVariantOptionSelect(
+                                      group.key,
+                                      optionValue,
+                                    )
                                   }
                                   aria-pressed={isActive}
                                   disabled={!isAvailable}
                                   title={optionValue}
                                 >
                                   {hasColorSwatch ? (
-                                    <span className="sr-only">{optionValue}</span>
+                                    <span className="sr-only">
+                                      {optionValue}
+                                    </span>
                                   ) : (
                                     optionValue
                                   )}
@@ -791,7 +818,8 @@ function ProductDetail() {
                           >
                             {group.values.map((optionValue) => {
                               const isActive =
-                                selectedVariantOptionValues[group.key] === optionValue;
+                                selectedVariantOptionValues[group.key] ===
+                                optionValue;
                               const matchedVariant = findBestMatchingVariant(
                                 productVariants,
                                 selectedVariantOptionValues,
@@ -806,7 +834,10 @@ function ProductDetail() {
                                   type="button"
                                   className={isActive ? "is-active" : ""}
                                   onClick={() =>
-                                    handleVariantOptionSelect(group.key, optionValue)
+                                    handleVariantOptionSelect(
+                                      group.key,
+                                      optionValue,
+                                    )
                                   }
                                   aria-pressed={isActive}
                                   disabled={!isAvailable}
@@ -893,7 +924,7 @@ function ProductDetail() {
                           selectedVariant?.stock ?? product?.stock ?? 0,
                         );
                         if (quantity >= currentStock) {
-                          setStockMessage(`Chỉ còn ${currentStock} sản phẩm.`);
+                          setStockMessage(`Only ${currentStock} items left.`);
                           setShowStockModal(true);
                         } else {
                           setQuantity((value) => value + 1);
@@ -910,7 +941,7 @@ function ProductDetail() {
                     disabled={isPurchaseDisabled}
                     onClick={handleBuyNow}
                   >
-                    Mua ngay
+                    Buy Now
                   </button>
 
                   <button
@@ -919,7 +950,7 @@ function ProductDetail() {
                     disabled={isPurchaseDisabled}
                     onClick={handleAddToCart}
                   >
-                    Thêm vào giỏ
+                    Add to Cart
                   </button>
 
                   {isCustomerAccount ? (
@@ -935,35 +966,38 @@ function ProductDetail() {
                       className="action-btn action-btn--primary action-btn--link"
                       to={`/vendor/products?edit=${product.id}`}
                     >
-                      Sửa sản phẩm
+                      Edit Product
                     </Link>
                   ) : null}
                 </div>
 
                 {!user && (
                   <p className="product-detail-helper">
-                    Bạn có thể xem chi tiết trước. Hãy đăng nhập customer để mua
-                    hàng, thêm vào giỏ hoặc lưu vào danh sách yêu thích.
+                    You can view the details first. Please sign in with a
+                    customer account to purchase, add to cart, or save to your
+                    wishlist.
                   </p>
                 )}
 
                 {user && !canPurchase && (
                   <p className="product-detail-helper product-detail-helper--warning">
-                    Tai khoan{" "}
-                    {(user.roles ?? []).join(", ") || "khong xac dinh"} khong co
-                    quyen mua hang. Vendor chi duoc xem chi tiet va quan ly san
-                    pham cua shop minh.
+                    The account {(user.roles ?? []).join(", ") || "unknown"}{" "}
+                    does not have permission to purchase. Vendors can only view
+                    details and manage products from their own shop.
                   </p>
                 )}
 
                 <div className="delivery-box">
                   <div className="delivery-box__item">
-                    <h4>Giao hàng</h4>
-                    <p>Kiểm tra khu vực nhận hàng và thời gian giao dự kiến.</p>
+                    <h4>Delivery</h4>
+                    <p>
+                      Check available delivery areas and estimated delivery
+                      time.
+                    </p>
                   </div>
                   <div className="delivery-box__item">
-                    <h4>Đổi trả</h4>
-                    <p>Hỗ trợ đổi trả theo chính sách của shop.</p>
+                    <h4>Returns</h4>
+                    <p>Returns are supported according to the shop policy.</p>
                   </div>
                 </div>
               </div>
@@ -971,7 +1005,7 @@ function ProductDetail() {
           </section>
 
           <section className="product-reviews">
-            <h3>Đánh giá từ khách hàng</h3>
+            <h3>Customer Reviews</h3>
 
             <div className="product-reviews__layout">
               <div className="product-reviews__list-wrap">
@@ -1006,7 +1040,7 @@ function ProductDetail() {
                         <p>{reviewItem.comment}</p>
                         {reviewItem?.vendorReply?.text && (
                           <div className="product-review-reply">
-                            <strong>Phản hồi từ shop</strong>
+                            <strong>Reply from the shop</strong>
                             <p>{reviewItem.vendorReply.text}</p>
                           </div>
                         )}
@@ -1015,7 +1049,7 @@ function ProductDetail() {
                           <div className="product-review-reply-form">
                             <textarea
                               rows="2"
-                              placeholder="Nhập phản hồi cho khách hàng..."
+                              placeholder="Enter a reply for the customer..."
                               value={
                                 replyTextByReview[
                                   `${reviewItem.customerEmail}-${reviewItem.createdAt}`
@@ -1039,8 +1073,8 @@ function ProductDetail() {
                             >
                               {processingReplyKey ===
                               `${reviewItem.customerEmail}-${reviewItem.createdAt}`
-                                ? "Đang gửi..."
-                                : "Gửi phản hồi"}
+                                ? "Sending..."
+                                : "Send Reply"}
                             </button>
                           </div>
                         )}
@@ -1049,7 +1083,7 @@ function ProductDetail() {
                   </div>
                 ) : (
                   <p className="product-detail-helper">
-                    Chua co danh gia nao cho san pham nay.
+                    There are no reviews for this product yet.
                   </p>
                 )}
               </div>
@@ -1118,15 +1152,15 @@ function ProductDetail() {
         ) : relatedProducts.length === 0 ? (
           <p className="related-section__empty">No related items yet.</p>
         ) : (
-            <div className="related-grid">
-              {relatedProducts.map((item) => (
-                <ProductCard
-                  key={item.id}
-                  product={item}
-                  flashSaleState={flashSaleState}
-                />
-              ))}
-            </div>
+          <div className="related-grid">
+            {relatedProducts.map((item) => (
+              <ProductCard
+                key={item.id}
+                product={item}
+                flashSaleState={flashSaleState}
+              />
+            ))}
+          </div>
         )}
       </section>
 
@@ -1137,7 +1171,7 @@ function ProductDetail() {
         >
           <div className="stock-modal" onClick={(e) => e.stopPropagation()}>
             <p>{stockMessage}</p>
-            <button onClick={() => setShowStockModal(false)}>Đóng</button>
+            <button onClick={() => setShowStockModal(false)}>Close</button>
           </div>
         </div>
       )}

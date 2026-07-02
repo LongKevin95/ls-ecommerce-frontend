@@ -6,11 +6,11 @@ import { useAuth } from "../../hooks/useAuth";
 import "./VendorOnboarding.css";
 
 const steps = [
-  "Thông tin Shop",
-  "Cài đặt vận chuyển",
-  "Thông tin định danh",
-  "Thông tin thuế",
-  "Hoàn tất",
+  "Shop Information",
+  "Shipping Settings",
+  "Identity Information",
+  "Tax Information",
+  "Finish",
 ];
 
 const emptyAddress = {
@@ -28,7 +28,7 @@ const emptyIdentityInfo = {
 };
 
 const emptyTaxInfo = {
-  businessType: "Cá nhân",
+  businessType: "Individual",
   registeredAddress: "",
   invoiceEmail: "",
   taxCode: "",
@@ -62,7 +62,7 @@ export default function VendorOnboarding() {
 
   const addressLabel = useMemo(() => {
     if (!pickupAddress.fullName) {
-      return "Chưa có địa chỉ lấy hàng";
+      return "No pickup address added yet";
     }
 
     return `${pickupAddress.fullName} | ${pickupAddress.phone} | ${pickupAddress.region} | ${pickupAddress.detail}`;
@@ -103,7 +103,7 @@ export default function VendorOnboarding() {
     const isValid = Object.values(addressDraft).every((value) => value.trim());
 
     if (!isValid) {
-      window.alert("Vui lòng nhập đầy đủ thông tin địa chỉ lấy hàng.");
+      window.alert("Please enter the complete pickup address information.");
       return;
     }
 
@@ -126,12 +126,14 @@ export default function VendorOnboarding() {
 
   const handleNextFromShop = () => {
     if (!shopInfo.name || !shopInfo.email || !shopInfo.phone) {
-      setErrorMessage("Vui lòng nhập đủ thông tin shop trước khi tiếp tục.");
+      setErrorMessage(
+        "Please enter the complete shop information before continuing.",
+      );
       return;
     }
 
     if (!pickupAddress.fullName) {
-      setErrorMessage("Vui lòng thêm địa chỉ lấy hàng.");
+      setErrorMessage("Please add a pickup address.");
       return;
     }
 
@@ -144,7 +146,9 @@ export default function VendorOnboarding() {
     );
 
     if (!isValid) {
-      setErrorMessage("Vui lòng nhập đầy đủ thông tin thuế trước khi hoàn tất.");
+      setErrorMessage(
+        "Please enter the complete tax information before finishing.",
+      );
       return;
     }
 
@@ -158,7 +162,7 @@ export default function VendorOnboarding() {
 
     if (!isValid) {
       setErrorMessage(
-        "Vui lòng nhập đầy đủ thông tin định danh trước khi tiếp tục.",
+        "Please enter the complete identity information before continuing.",
       );
       return;
     }
@@ -180,7 +184,7 @@ export default function VendorOnboarding() {
       navigate("/vendor");
     } catch (error) {
       window.alert(
-        error?.message ?? "Chưa thể hoàn tất đăng ký. Vui lòng thử lại.",
+        error?.message ?? "Unable to complete registration. Please try again.",
       );
     }
   };
@@ -189,12 +193,12 @@ export default function VendorOnboarding() {
     <main className="vendor-onboarding">
       <div className="vendor-container">
         <header className="vendor-header">
-          <h1>Đăng ký trở thành Người bán</h1>
+          <h1>Register as a Seller</h1>
         </header>
 
         <section
           className="vendor-progress"
-          aria-label="Tiến trình đăng ký vendor"
+          aria-label="Vendor registration progress"
         >
           <div className="vendor-progress__meta">
             <strong>{currentStepLabel}</strong>
@@ -235,11 +239,11 @@ export default function VendorOnboarding() {
           <section className="vendor-card">
             <div className="vendor-form">
               <label>
-                Tên Shop
+                Shop Name
                 <input
                   name="name"
                   type="text"
-                  placeholder="Nhập tên shop"
+                  placeholder="Enter shop name"
                   value={shopInfo.name}
                   onChange={handleShopInfoChange}
                 />
@@ -247,11 +251,11 @@ export default function VendorOnboarding() {
 
               <div className="vendor-row">
                 <label className="vendor-label">
-                  Địa chỉ lấy hàng
+                  Pickup Address
                   <div className="vendor-address">
                     <span>{addressLabel}</span>
                     <button type="button" onClick={handleOpenModal}>
-                      + Thêm
+                      + Add
                     </button>
                   </div>
                 </label>
@@ -262,18 +266,18 @@ export default function VendorOnboarding() {
                 <input
                   name="email"
                   type="email"
-                  placeholder="Nhập email"
+                  placeholder="Enter email"
                   value={shopInfo.email}
                   onChange={handleShopInfoChange}
                 />
               </label>
 
               <label>
-                Số điện thoại
+                Phone Number
                 <input
                   name="phone"
                   type="tel"
-                  placeholder="Nhập số điện thoại"
+                  placeholder="Enter phone number"
                   value={shopInfo.phone}
                   onChange={handleShopInfoChange}
                 />
@@ -283,14 +287,14 @@ export default function VendorOnboarding() {
 
               <div className="vendor-actions">
                 <button type="button" className="btn-muted">
-                  Lưu
+                  Save
                 </button>
                 <button
                   type="button"
                   className="btn-primary"
                   onClick={handleNextFromShop}
                 >
-                  Tiếp theo
+                  Next
                 </button>
               </div>
             </div>
@@ -299,21 +303,21 @@ export default function VendorOnboarding() {
 
         {currentStep === 1 && (
           <section className="vendor-card">
-            <h2>Cài đặt vận chuyển</h2>
+            <h2>Shipping Settings</h2>
             <div className="vendor-shipping">
               <div className="shipping-card">
                 <div>
-                  <h3>Hỏa tốc</h3>
-                  <p>COD đã được kích hoạt</p>
+                  <h3>Express Delivery</h3>
+                  <p>COD is enabled</p>
                 </div>
                 <div className="shipping-toggles">
                   <label>
                     <input type="checkbox" defaultChecked />
-                    <span> Kích hoạt đơn vị vận chuyển này</span>
+                    <span> Enable this shipping provider</span>
                   </label>
                   <label>
                     <input type="checkbox" defaultChecked />
-                    <span> Kích hoạt COD</span>
+                    <span> Enable COD</span>
                   </label>
                 </div>
               </div>
@@ -325,7 +329,7 @@ export default function VendorOnboarding() {
                 className="btn-muted"
                 onClick={() => setCurrentStep(0)}
               >
-                Quay lại
+                Back
               </button>
               <button
                 type="button"
@@ -335,7 +339,7 @@ export default function VendorOnboarding() {
                   setCurrentStep(2);
                 }}
               >
-                Tiếp theo
+                Next
               </button>
             </div>
           </section>
@@ -344,31 +348,31 @@ export default function VendorOnboarding() {
         {currentStep === 2 && (
           <section className="vendor-card">
             <div className="vendor-info">
-              Vui lòng nhập đủ thông tin định danh cơ bản để tiếp tục.
+              Please enter the complete basic identity information to continue.
             </div>
             <div className="vendor-tax">
               <label>
-                Họ và tên theo giấy tờ
+                Full Legal Name
                 <input
                   name="legalName"
                   type="text"
-                  placeholder="Nhập họ và tên"
+                  placeholder="Enter full name"
                   value={identityInfo.legalName}
                   onChange={handleIdentityChange}
                 />
               </label>
               <label>
-                Số CCCD/CMND
+                ID Number
                 <input
                   name="idNumber"
                   type="text"
-                  placeholder="Nhập số giấy tờ"
+                  placeholder="Enter ID number"
                   value={identityInfo.idNumber}
                   onChange={handleIdentityChange}
                 />
               </label>
               <label>
-                Ngày cấp
+                Issue Date
                 <input
                   name="issuedDate"
                   type="date"
@@ -377,11 +381,11 @@ export default function VendorOnboarding() {
                 />
               </label>
               <label>
-                Nơi cấp
+                Place of Issue
                 <input
                   name="issuedPlace"
                   type="text"
-                  placeholder="Nhập nơi cấp"
+                  placeholder="Enter place of issue"
                   value={identityInfo.issuedPlace}
                   onChange={handleIdentityChange}
                 />
@@ -394,14 +398,14 @@ export default function VendorOnboarding() {
                 className="btn-muted"
                 onClick={() => setCurrentStep(1)}
               >
-                Quay lại
+                Back
               </button>
               <button
                 type="button"
                 className="btn-primary"
                 onClick={handleNextFromIdentity}
               >
-                Tiếp theo
+                Next
               </button>
             </div>
           </section>
@@ -410,48 +414,48 @@ export default function VendorOnboarding() {
         {currentStep === 3 && (
           <section className="vendor-card">
             <div className="vendor-info">
-              Vui lòng nhập đủ thông tin thuế để hoàn tất đăng ký.
+              Please enter the complete tax information to finish registration.
             </div>
             <div className="vendor-tax">
               <label>
-                Loại hình kinh doanh
+                Business Type
                 <span> </span>
                 <select
                   name="businessType"
                   value={taxInfo.businessType}
                   onChange={handleTaxChange}
                 >
-                  <option value="Cá nhân">Cá nhân</option>
-                  <option value="Hộ kinh doanh">Hộ kinh doanh</option>
-                  <option value="Công ty">Công ty</option>
+                  <option value="Individual">Individual</option>
+                  <option value="Household Business">Household Business</option>
+                  <option value="Company">Company</option>
                 </select>
               </label>
               <label>
-                Địa chỉ đăng ký kinh doanh<span> </span>
+                Registered Business Address<span> </span>
                 <input
                   name="registeredAddress"
                   type="text"
-                  placeholder="Nhập địa chỉ"
+                  placeholder="Enter address"
                   value={taxInfo.registeredAddress}
                   onChange={handleTaxChange}
                 />
               </label>
               <label>
-                Email nhận hóa đơn điện tử<span> </span>
+                E-invoice Email<span> </span>
                 <input
                   name="invoiceEmail"
                   type="email"
-                  placeholder="Nhập email"
+                  placeholder="Enter email"
                   value={taxInfo.invoiceEmail}
                   onChange={handleTaxChange}
                 />
               </label>
               <label>
-                Mã số thuế<span> </span>
+                Tax Code<span> </span>
                 <input
                   name="taxCode"
                   type="text"
-                  placeholder="Nhập mã số thuế"
+                  placeholder="Enter tax code"
                   value={taxInfo.taxCode}
                   onChange={handleTaxChange}
                 />
@@ -464,14 +468,14 @@ export default function VendorOnboarding() {
                 className="btn-muted"
                 onClick={() => setCurrentStep(2)}
               >
-                Quay lại
+                Back
               </button>
               <button
                 type="button"
                 className="btn-primary"
                 onClick={handleFinishTax}
               >
-                Hoàn tất
+                Finish
               </button>
             </div>
           </section>
@@ -481,16 +485,14 @@ export default function VendorOnboarding() {
           <section className="vendor-card vendor-card--center">
             <div className="vendor-success">
               <div className="success-icon">✓</div>
-              <h2>Đăng ký thành công</h2>
-              <p>
-                Hãy đăng bán sản phẩm đầu tiên để bắt đầu hành trình bán hàng.
-              </p>
+              <h2>Registration Successful</h2>
+              <p>Publish your first product to start your selling journey.</p>
               <button
                 type="button"
                 className="btn-primary"
                 onClick={handleEnterVendorCenter}
               >
-                Vào Vendor Center
+                Go to Vendor Center
               </button>
             </div>
           </section>
@@ -501,7 +503,7 @@ export default function VendorOnboarding() {
         <div className="vendor-modal" role="dialog" aria-modal="true">
           <div className="vendor-modal__content">
             <div className="vendor-modal__header">
-              <h3>Thêm Địa Chỉ Mới</h3>
+              <h3>Add New Address</h3>
               <button type="button" onClick={handleCloseModal}>
                 ×
               </button>
@@ -509,39 +511,39 @@ export default function VendorOnboarding() {
 
             <div className="vendor-modal__body">
               <label>
-                Họ & Tên
+                Full Name
                 <input
                   name="fullName"
                   type="text"
-                  placeholder="Nhập vào"
+                  placeholder="Enter value"
                   value={addressDraft.fullName}
                   onChange={handleAddressChange}
                 />
               </label>
               <label>
-                Số điện thoại
+                Phone Number
                 <input
                   name="phone"
                   type="text"
-                  placeholder="Nhập vào"
+                  placeholder="Enter value"
                   value={addressDraft.phone}
                   onChange={handleAddressChange}
                 />
               </label>
               <label>
-                Tỉnh/Thành phố/Quận/Huyện/Phường/Xã
+                Province/City/District/Ward
                 <textarea
                   name="region"
-                  placeholder="Chọn"
+                  placeholder="Select"
                   value={addressDraft.region}
                   onChange={handleAddressChange}
                 />
               </label>
               <label>
-                Địa chỉ chi tiết
+                Detailed Address
                 <textarea
                   name="detail"
-                  placeholder="Số nhà, tên đường..."
+                  placeholder="House number, street name..."
                   value={addressDraft.detail}
                   onChange={handleAddressChange}
                 />
@@ -554,14 +556,14 @@ export default function VendorOnboarding() {
                 className="btn-muted"
                 onClick={handleCloseModal}
               >
-                Hủy
+                Cancel
               </button>
               <button
                 type="button"
                 className="btn-primary"
                 onClick={handleSaveAddress}
               >
-                Lưu
+                Save
               </button>
             </div>
           </div>

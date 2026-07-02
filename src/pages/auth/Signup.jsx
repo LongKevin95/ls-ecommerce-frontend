@@ -42,12 +42,12 @@ export default function Signup() {
     setErrorMessage("");
 
     if (formValues.password.length < 6) {
-      setErrorMessage("Mật khẩu cần ít nhất 6 ký tự.");
+      setErrorMessage("Password must be at least 6 characters.");
       return;
     }
 
     if (formValues.password !== formValues.confirmPassword) {
-      setErrorMessage("Mật khẩu nhập lại chưa khớp.");
+      setErrorMessage("Password confirmation does not match.");
       return;
     }
 
@@ -62,7 +62,7 @@ export default function Signup() {
       navigate("/");
     } catch (error) {
       setErrorMessage(
-        error?.message ?? "Đăng ký chưa thành công. Vui lòng thử lại.",
+        error?.message ?? "Signup was not successful. Please try again.",
       );
     } finally {
       setIsSubmitting(false);
