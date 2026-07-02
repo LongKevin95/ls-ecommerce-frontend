@@ -253,7 +253,6 @@
   gap: 14px;
 }
 
-
 .option-row h3 {
   min-width: 68px;
   font-size: 22px;
@@ -281,11 +280,11 @@
 }
 
 .color-option-label {
-background-color: transparent;
-padding: 8px;
-cursor: pointer;
+  background-color: transparent;
+  padding: 8px;
+  cursor: pointer;
 }
-.color-option-label.is-active{
+.color-option-label.is-active {
   background-color: black;
   color: white;
 }
@@ -325,15 +324,15 @@ cursor: pointer;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px; 
+  gap: 8px;
 }
 
 .variant-option-buttons button {
-    cursor: pointer;
-    background: #fff;
-    border: 1px solid #d6d6d6;
-    min-width: 42px;
-    height: 38px;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #d6d6d6;
+  min-width: 42px;
+  height: 38px;
 }
 
 .variant-option-buttons button.is-active {

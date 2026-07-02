@@ -144,7 +144,9 @@ function normalizeVariantAttributeFields(categoryValue) {
 }
 
 function hasColorVariantField(categoryValue) {
-  return normalizeVariantFields(categoryValue).some((field) => field.key === "color");
+  return normalizeVariantFields(categoryValue).some(
+    (field) => field.key === "color",
+  );
 }
 
 function normalizeHexColorValue(value) {
@@ -156,16 +158,17 @@ function isValidHexColorValue(value) {
 }
 
 function normalizeVariantAttributeValues(categoryValue, attributes = {}) {
-  const normalizedAttributes = normalizeVariantAttributeFields(categoryValue).reduce(
-    (result, field) => {
-      result[field.key] = String(attributes?.[field.key] ?? "");
-      return result;
-    },
-    {},
-  );
+  const normalizedAttributes = normalizeVariantAttributeFields(
+    categoryValue,
+  ).reduce((result, field) => {
+    result[field.key] = String(attributes?.[field.key] ?? "");
+    return result;
+  }, {});
 
   if (hasColorVariantField(categoryValue)) {
-    normalizedAttributes.colorHex = normalizeHexColorValue(attributes?.colorHex);
+    normalizedAttributes.colorHex = normalizeHexColorValue(
+      attributes?.colorHex,
+    );
   }
 
   return normalizedAttributes;
@@ -210,12 +213,21 @@ function createVariantDraft(categoryValue, overrides = {}) {
   };
 }
 
-function buildVariantSignature(categoryValue, optionValues = {}, attributes = {}) {
+function buildVariantSignature(
+  categoryValue,
+  optionValues = {},
+  attributes = {},
+) {
   const optionParts = normalizeVariantFields(categoryValue).map((field) =>
-    String(optionValues?.[field.key] ?? "").trim().toLowerCase(),
+    String(optionValues?.[field.key] ?? "")
+      .trim()
+      .toLowerCase(),
   );
   const attributeParts = normalizeVariantAttributeFields(categoryValue).map(
-    (field) => String(attributes?.[field.key] ?? "").trim().toLowerCase(),
+    (field) =>
+      String(attributes?.[field.key] ?? "")
+        .trim()
+        .toLowerCase(),
   );
   return [...optionParts, ...attributeParts].join("||");
 }
@@ -268,7 +280,12 @@ function buildVariantSkuSegments(categoryValue, variant) {
   return optionSegments.length > 0 ? optionSegments : ["DEFAULT"];
 }
 
-function buildAutoVariantSku(categoryValue, productTitle, variant, variantIndex = 0) {
+function buildAutoVariantSku(
+  categoryValue,
+  productTitle,
+  variant,
+  variantIndex = 0,
+) {
   const categoryPrefix = getCategorySkuPrefix(categoryValue);
   const productSegment = createSkuSegment(productTitle, 6) || "ITEM";
   const optionSegments = buildVariantSkuSegments(categoryValue, variant);
@@ -277,17 +294,29 @@ function buildAutoVariantSku(categoryValue, productTitle, variant, variantIndex 
     "0",
   );
 
-  return [categoryPrefix, productSegment, ...optionSegments, sequence].join("-");
+  return [categoryPrefix, productSegment, ...optionSegments, sequence].join(
+    "-",
+  );
 }
 
-function resolveVariantSku(categoryValue, productTitle, variant, variantIndex = 0) {
+function resolveVariantSku(
+  categoryValue,
+  productTitle,
+  variant,
+  variantIndex = 0,
+) {
   const existingSku = String(variant?.sku ?? "").trim();
 
   if (existingSku) {
     return existingSku;
   }
 
-  return buildAutoVariantSku(categoryValue, productTitle, variant, variantIndex);
+  return buildAutoVariantSku(
+    categoryValue,
+    productTitle,
+    variant,
+    variantIndex,
+  );
 }
 
 function ensureSingleDefaultVariant(variants = [], preferredLocalId = "") {
@@ -304,7 +333,8 @@ function ensureSingleDefaultVariant(variants = [], preferredLocalId = "") {
   const resolvedDefaultLocalId =
     (normalizedPreferredLocalId &&
       nextVariants.some(
-        (variant) => String(variant?.localId ?? "").trim() === normalizedPreferredLocalId,
+        (variant) =>
+          String(variant?.localId ?? "").trim() === normalizedPreferredLocalId,
       ) &&
       normalizedPreferredLocalId) ||
     existingDefaultLocalId ||
@@ -339,7 +369,9 @@ function buildGeneratorInputsFromVariants(categoryValue, variants = []) {
       result[field.key] = [
         ...new Set(
           (Array.isArray(variants) ? variants : [])
-            .map((variant) => String(variant?.attributes?.[field.key] ?? "").trim())
+            .map((variant) =>
+              String(variant?.attributes?.[field.key] ?? "").trim(),
+            )
             .filter(Boolean),
         ),
       ].join(", ");
@@ -689,11 +721,13 @@ export default function VendorProducts() {
   }, [vendorProducts, editingId]);
 
   const editingProductStatusKey = useMemo(() => {
-    return String(editingProduct?.status ?? "").trim().toLowerCase();
+    return String(editingProduct?.status ?? "")
+      .trim()
+      .toLowerCase();
   }, [editingProduct]);
 
-  const canUpdateLive = Boolean(editingId) &&
-    editingProductStatusKey === PRODUCT_STATUS.ACTIVE;
+  const canUpdateLive =
+    Boolean(editingId) && editingProductStatusKey === PRODUCT_STATUS.ACTIVE;
 
   function syncProductCaches(nextProduct) {
     const normalizedId = String(nextProduct?.id ?? "").trim();
@@ -754,7 +788,9 @@ export default function VendorProducts() {
   );
   const defaultVariantLocalId = useMemo(
     () =>
-      String(variantRows.find((variant) => variant?.isDefault)?.localId ?? "").trim(),
+      String(
+        variantRows.find((variant) => variant?.isDefault)?.localId ?? "",
+      ).trim(),
     [variantRows],
   );
 
@@ -1023,7 +1059,8 @@ export default function VendorProducts() {
       return;
     }
 
-    const looksLikeUrl = /^(https?:)?\/\//i.test(value) || value.startsWith("data:");
+    const looksLikeUrl =
+      /^(https?:)?\/\//i.test(value) || value.startsWith("data:");
 
     if (!looksLikeUrl) {
       setInvalidImageUrlByLocalId((prev) => ({ ...prev, [localId]: true }));
@@ -1222,7 +1259,9 @@ export default function VendorProducts() {
     setSelectedGalleryFiles([]);
     setVariantRows([]);
     setVariantDraft(createVariantDraft(defaultForm.category));
-    setVariantGeneratorInputs(createVariantGeneratorInputs(defaultForm.category));
+    setVariantGeneratorInputs(
+      createVariantGeneratorInputs(defaultForm.category),
+    );
     setEditingVariantLocalId("");
     setImagePendingRemoval(null);
     setEditingId("");
@@ -1320,7 +1359,9 @@ export default function VendorProducts() {
     }
 
     if (!hasMeaningfulVariantDraft(variantDraft)) {
-      setErrorMessage("Hãy nhập thông tin biến thể trước khi thêm vào danh sách.");
+      setErrorMessage(
+        "Hãy nhập thông tin biến thể trước khi thêm vào danh sách.",
+      );
       return;
     }
 
@@ -1331,7 +1372,8 @@ export default function VendorProducts() {
     const nextVariantIndex = editingVariantLocalId
       ? Math.max(
           variantRows.findIndex(
-            (variant) => String(variant.localId) === String(editingVariantLocalId),
+            (variant) =>
+              String(variant.localId) === String(editingVariantLocalId),
           ),
           0,
         )
@@ -1380,7 +1422,9 @@ export default function VendorProducts() {
     setVariantRows((previous) => {
       const nextRows = editingVariantLocalId
         ? previous.map((variant) =>
-            variant.localId === editingVariantLocalId ? nextVariantWithSku : variant,
+            variant.localId === editingVariantLocalId
+              ? nextVariantWithSku
+              : variant,
           )
         : [...previous, nextVariantWithSku];
 
@@ -1464,7 +1508,9 @@ export default function VendorProducts() {
       generatorAttributeFieldValues.find((field) => field.values.length === 0);
 
     if (missingField) {
-      setErrorMessage(`Vui lòng nhập ít nhất 1 giá trị cho ${missingField.label}.`);
+      setErrorMessage(
+        `Vui lòng nhập ít nhất 1 giá trị cho ${missingField.label}.`,
+      );
       return;
     }
 
@@ -1489,10 +1535,12 @@ export default function VendorProducts() {
       [{}],
     );
     const combinations = optionCombinations.flatMap((opt) =>
-      (attributeCombinations.length ? attributeCombinations : [{}]).map((attr) => ({
-        optionValues: opt,
-        attributes: attr,
-      })),
+      (attributeCombinations.length ? attributeCombinations : [{}]).map(
+        (attr) => ({
+          optionValues: opt,
+          attributes: attr,
+        }),
+      ),
     );
     const existingSignatures = new Set(
       variantRows
@@ -1536,15 +1584,17 @@ export default function VendorProducts() {
         existingSignatures.add(signature);
         return true;
       });
-    const generatedVariantsWithSku = generatedVariants.map((variant, index) => ({
-      ...variant,
-      sku: resolveVariantSku(
-        form.category,
-        form.title,
-        variant,
-        variantRows.length + index,
-      ),
-    }));
+    const generatedVariantsWithSku = generatedVariants.map(
+      (variant, index) => ({
+        ...variant,
+        sku: resolveVariantSku(
+          form.category,
+          form.title,
+          variant,
+          variantRows.length + index,
+        ),
+      }),
+    );
 
     if (generatedVariantsWithSku.length === 0) {
       setErrorMessage("Tất cả tổ hợp biến thể đã tồn tại trong danh sách.");
@@ -1704,7 +1754,10 @@ export default function VendorProducts() {
             normalizedAttributes,
           );
 
-          if (variantSignature && variantSignatureRegistry.has(variantSignature)) {
+          if (
+            variantSignature &&
+            variantSignatureRegistry.has(variantSignature)
+          ) {
             throw new Error("Có biến thể bị trùng tổ hợp tùy chọn.");
           }
 
@@ -1864,10 +1917,7 @@ export default function VendorProducts() {
       .trim()
       .toLowerCase();
 
-    if (
-      action === "delete" &&
-      productStatus !== PRODUCT_STATUS.DRAFT
-    ) {
+    if (action === "delete" && productStatus !== PRODUCT_STATUS.DRAFT) {
       setErrorMessage("Chỉ có thể xóa sản phẩm ở trạng thái draft.");
       return;
     }
@@ -1986,8 +2036,9 @@ export default function VendorProducts() {
                     >
                       {categories.map((category) => (
                         <option key={category} value={category}>
-                          {categoryOptions.find((item) => item.value === category)
-                            ?.label ?? category}
+                          {categoryOptions.find(
+                            (item) => item.value === category,
+                          )?.label ?? category}
                         </option>
                       ))}
                     </select>
@@ -2041,7 +2092,6 @@ export default function VendorProducts() {
                         onChange={handleInputChange}
                       />
 
-
                       {existingThumbnail && (
                         <div className="vendor-products-image-list">
                           <button
@@ -2053,7 +2103,10 @@ export default function VendorProducts() {
                               "Thumbnail hiện tại",
                             )}`}
                           >
-                            <img src={existingThumbnail} alt="Current thumbnail" />
+                            <img
+                              src={existingThumbnail}
+                              alt="Current thumbnail"
+                            />
                           </button>
                         </div>
                       )}
@@ -2091,7 +2144,7 @@ export default function VendorProducts() {
                         value={form.galleryUrlsText}
                         onChange={handleInputChange}
                       />
-                    
+
                       {existingGalleryImages.length > 0 && (
                         <div className="vendor-products-image-list">
                           {existingGalleryImages.map((image, index) => (
@@ -2100,14 +2153,20 @@ export default function VendorProducts() {
                               type="button"
                               className="vendor-products-image-thumb"
                               onClick={() =>
-                                handleRequestRemoveExistingGalleryImage(image, index)
+                                handleRequestRemoveExistingGalleryImage(
+                                  image,
+                                  index,
+                                )
                               }
                               title={`Xóa ảnh ${getStoredImageLabel(
                                 image,
                                 `Gallery image ${index + 1}`,
                               )}`}
                             >
-                              <img src={image} alt={`Current gallery ${index + 1}`} />
+                              <img
+                                src={image}
+                                alt={`Current gallery ${index + 1}`}
+                              />
                             </button>
                           ))}
                         </div>
@@ -2120,7 +2179,9 @@ export default function VendorProducts() {
                               key={getSelectedFileKey(file)}
                               type="button"
                               className="vendor-products-file-chip"
-                              onClick={() => handleRemoveSelectedGalleryFile(file)}
+                              onClick={() =>
+                                handleRemoveSelectedGalleryFile(file)
+                              }
                               title={`Xóa ảnh ${file.name}`}
                             >
                               {file.name}
@@ -2250,10 +2311,7 @@ export default function VendorProducts() {
                   <div className="vendor-products-variants__header">
                     <div>
                       <strong>Variants</strong>
-                      <p>
-                        Dùng Generate variants để sinh nhanh các tổ hợp. Sau đó bạn có
-                        thể chỉnh từng biến thể và lưu toàn bộ cùng sản phẩm.
-                      </p>
+                      <p>Dùng Generate variants để sinh nhanh các tổ hợp.</p>
                     </div>
                   </div>
 
@@ -2267,7 +2325,10 @@ export default function VendorProducts() {
                             placeholder={`VD: ${field.label} 1, ${field.label} 2`}
                             value={variantGeneratorInputs[field.key] ?? ""}
                             onChange={(event) =>
-                              handleVariantGeneratorChange(field.key, event.target.value)
+                              handleVariantGeneratorChange(
+                                field.key,
+                                event.target.value,
+                              )
                             }
                           />
                         </label>
@@ -2280,7 +2341,10 @@ export default function VendorProducts() {
                             placeholder={`VD: ${field.label} 1, ${field.label} 2`}
                             value={variantGeneratorInputs[field.key] ?? ""}
                             onChange={(event) =>
-                              handleVariantGeneratorChange(field.key, event.target.value)
+                              handleVariantGeneratorChange(
+                                field.key,
+                                event.target.value,
+                              )
                             }
                           />
                         </label>
@@ -2301,7 +2365,9 @@ export default function VendorProducts() {
                   <div className="vendor-products-variant-card">
                     <div className="vendor-products-variant-card__header">
                       <strong>
-                        {editingVariantLocalId ? "Edit variant" : "Variant editor"}
+                        {editingVariantLocalId
+                          ? "Edit variant"
+                          : "Variant editor"}
                       </strong>
                       {editingVariantLocalId && (
                         <button
@@ -2322,7 +2388,10 @@ export default function VendorProducts() {
                             type="text"
                             value={variantDraft.optionValues?.[field.key] ?? ""}
                             onChange={(event) =>
-                              handleVariantOptionChange(field.key, event.target.value)
+                              handleVariantOptionChange(
+                                field.key,
+                                event.target.value,
+                              )
                             }
                           />
                         </label>
@@ -2336,7 +2405,10 @@ export default function VendorProducts() {
                             placeholder="#ff0000"
                             value={variantDraft.attributes?.colorHex ?? ""}
                             onChange={(event) =>
-                              handleVariantAttributeChange("colorHex", event.target.value)
+                              handleVariantAttributeChange(
+                                "colorHex",
+                                event.target.value,
+                              )
                             }
                           />
                         </label>
@@ -2349,7 +2421,10 @@ export default function VendorProducts() {
                             type="text"
                             value={variantDraft.attributes?.[field.key] ?? ""}
                             onChange={(event) =>
-                              handleVariantAttributeChange(field.key, event.target.value)
+                              handleVariantAttributeChange(
+                                field.key,
+                                event.target.value,
+                              )
                             }
                           />
                         </label>
@@ -2372,7 +2447,10 @@ export default function VendorProducts() {
                           type="text"
                           value={variantDraft.title}
                           onChange={(event) =>
-                            handleVariantFieldChange("title", event.target.value)
+                            handleVariantFieldChange(
+                              "title",
+                              event.target.value,
+                            )
                           }
                         />
                       </label>
@@ -2384,7 +2462,10 @@ export default function VendorProducts() {
                           min="0"
                           value={variantDraft.price}
                           onChange={(event) =>
-                            handleVariantFieldChange("price", event.target.value)
+                            handleVariantFieldChange(
+                              "price",
+                              event.target.value,
+                            )
                           }
                         />
                       </label>
@@ -2396,7 +2477,10 @@ export default function VendorProducts() {
                           min="0"
                           value={variantDraft.oldPrice}
                           onChange={(event) =>
-                            handleVariantFieldChange("oldPrice", event.target.value)
+                            handleVariantFieldChange(
+                              "oldPrice",
+                              event.target.value,
+                            )
                           }
                         />
                       </label>
@@ -2408,7 +2492,10 @@ export default function VendorProducts() {
                           min="0"
                           value={variantDraft.stock}
                           onChange={(event) =>
-                            handleVariantFieldChange("stock", event.target.value)
+                            handleVariantFieldChange(
+                              "stock",
+                              event.target.value,
+                            )
                           }
                         />
                       </label>
@@ -2420,7 +2507,10 @@ export default function VendorProducts() {
                           placeholder="https://example.com/variant-image.jpg"
                           value={variantDraft.image}
                           onChange={(event) =>
-                            handleVariantFieldChange("image", event.target.value)
+                            handleVariantFieldChange(
+                              "image",
+                              event.target.value,
+                            )
                           }
                         />
                       </label>
@@ -2430,7 +2520,10 @@ export default function VendorProducts() {
                           type="checkbox"
                           checked={Boolean(variantDraft.isDefault)}
                           onChange={(event) =>
-                            handleVariantFieldChange("isDefault", event.target.checked)
+                            handleVariantFieldChange(
+                              "isDefault",
+                              event.target.checked,
+                            )
                           }
                         />
                         <span>Set as default variant</span>
@@ -2443,7 +2536,9 @@ export default function VendorProducts() {
                         className="vendor-products-variants__add-btn"
                         onClick={handleSaveVariantDraft}
                       >
-                        {editingVariantLocalId ? "Update variant" : "Add to list"}
+                        {editingVariantLocalId
+                          ? "Update variant"
+                          : "Add to list"}
                       </button>
                     </div>
                   </div>
@@ -2458,7 +2553,6 @@ export default function VendorProducts() {
               </div>
 
               <div>
-                <span>Bulk apply from editor:</span>
                 <div className="vendor-products-variant-summary__bulk-actions">
                   <button
                     type="button"
@@ -2493,8 +2587,8 @@ export default function VendorProducts() {
 
               {variantRows.length === 0 ? (
                 <p className="vendor-products-variant-summary__empty">
-                  Chưa có biến thể nào trong danh sách. Bạn có thể generate hoặc
-                  thêm thủ công từ editor phía trên.
+                  Chỉnh sửa một sản phẩm hoặc generate biến thể mới để xem danh
+                  sách biến thể của sản phẩm.
                 </p>
               ) : (
                 <div className="vendor-products-variant-table-wrapper">
@@ -2546,13 +2640,21 @@ export default function VendorProducts() {
                           <span className="vendor-products-variant-table__media">
                             <div className="vendor-products-variant-summary__media">
                               {variantImage ? (
-                                <img src={variantImage} alt={buildVariantLabel(form.category, variant)} />
+                                <img
+                                  src={variantImage}
+                                  alt={buildVariantLabel(
+                                    form.category,
+                                    variant,
+                                  )}
+                                />
                               ) : (
                                 <span>No image</span>
                               )}
                             </div>
                           </span>
-                          <span>{buildVariantLabel(form.category, variant)}</span>
+                          <span>
+                            {buildVariantLabel(form.category, variant)}
+                          </span>
                           <span>{displayedSku}</span>
                           <span>
                             <input
@@ -2612,7 +2714,9 @@ export default function VendorProducts() {
                               type="radio"
                               name="vendor-default-variant"
                               checked={!!variant.isDefault}
-                              onChange={() => handleSetDefaultVariant(variant.localId)}
+                              onChange={() =>
+                                handleSetDefaultVariant(variant.localId)
+                              }
                               aria-label="Set as default variant"
                             />
                           </span>
@@ -2621,7 +2725,9 @@ export default function VendorProducts() {
                               <button
                                 type="button"
                                 className="vendor-action-btn vendor-action-btn--icon vendor-action-btn--edit"
-                                onClick={() => handleEditVariant(variant.localId)}
+                                onClick={() =>
+                                  handleEditVariant(variant.localId)
+                                }
                                 title="Edit variant"
                                 aria-label="Edit variant"
                               >
@@ -2630,7 +2736,9 @@ export default function VendorProducts() {
                               <button
                                 type="button"
                                 className="vendor-action-btn vendor-action-btn--icon vendor-action-btn--delete"
-                                onClick={() => handleRemoveVariantRow(variant.localId)}
+                                onClick={() =>
+                                  handleRemoveVariantRow(variant.localId)
+                                }
                                 title="Delete variant"
                                 aria-label="Delete variant"
                               >
