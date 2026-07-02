@@ -134,7 +134,6 @@ export default function Wishlist() {
 
       <div className="wishlist-header">
         <div className="wishlist-header__copy">
-          <p>Wishlist</p>
           <h1>Saved Products</h1>
           <span>
             Quickly track the items you want to buy again or move straight to

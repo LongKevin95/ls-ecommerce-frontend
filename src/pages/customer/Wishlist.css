@@ -1,4 +1,5 @@
-.wishlist-page {
+.wishlist-page.o-container {
+  min-height: 100vh;
   padding-top: 20px;
   padding-bottom: 40px;
 }

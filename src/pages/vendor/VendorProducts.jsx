@@ -708,7 +708,7 @@ export default function VendorProducts() {
     return vendorProducts.filter(
       (product) =>
         String(product?.flashSaleCampaignId ?? "").trim() ===
-          String(flashSaleState?.currentCampaignId ?? "").trim() &&
+        String(flashSaleState?.currentCampaignId ?? "").trim() &&
         Number(product?.flashSaleDiscountPercent ?? 0) > 0,
     );
   }, [
@@ -851,26 +851,26 @@ export default function VendorProducts() {
       const nextVariantRows =
         Array.isArray(product?.variants) && product.variants.length > 0
           ? ensureSingleDefaultVariant(
-              product.variants.map((variant) =>
-                createVariantDraft(product.category, {
-                  localId: variant.id,
-                  sku: variant.sku,
-                  title: variant.title,
-                  price: variant.price,
-                  oldPrice: variant.oldPrice,
-                  stock: variant.stock,
-                  image: variant.image,
-                  isDefault: variant.isDefault,
-                  optionValues: variant.optionValues,
-                  attributes: variant.attributes,
-                }),
-              ),
-              String(
-                product.variants.find((variant) => variant?.isDefault)?.id ??
-                  product.defaultVariantId ??
-                  "",
-              ).trim(),
-            )
+            product.variants.map((variant) =>
+              createVariantDraft(product.category, {
+                localId: variant.id,
+                sku: variant.sku,
+                title: variant.title,
+                price: variant.price,
+                oldPrice: variant.oldPrice,
+                stock: variant.stock,
+                image: variant.image,
+                isDefault: variant.isDefault,
+                optionValues: variant.optionValues,
+                attributes: variant.attributes,
+              }),
+            ),
+            String(
+              product.variants.find((variant) => variant?.isDefault)?.id ??
+              product.defaultVariantId ??
+              "",
+            ).trim(),
+          )
           : [];
 
       setEditingId(String(product.id));
@@ -883,10 +883,10 @@ export default function VendorProducts() {
         flashSaleEnabled:
           isFlashSaleCampaignOpen &&
           String(product?.flashSaleCampaignId ?? "").trim() ===
-            String(flashSaleState?.currentCampaignId ?? "").trim(),
+          String(flashSaleState?.currentCampaignId ?? "").trim(),
         flashSaleDiscountPercent:
           isFlashSaleCampaignOpen &&
-          String(product?.flashSaleCampaignId ?? "").trim() ===
+            String(product?.flashSaleCampaignId ?? "").trim() ===
             String(flashSaleState?.currentCampaignId ?? "").trim()
             ? String(product?.flashSaleDiscountPercent ?? "")
             : "",
@@ -1094,7 +1094,7 @@ export default function VendorProducts() {
       ...previous,
       thumbnailUrl:
         normalizeImageSource(previous.thumbnailUrl) ===
-        normalizeImageSource(existingThumbnail)
+          normalizeImageSource(existingThumbnail)
           ? ""
           : previous.thumbnailUrl,
     }));
@@ -1310,12 +1310,12 @@ export default function VendorProducts() {
     });
     const nextVariantIndex = editingVariantLocalId
       ? Math.max(
-          variantRows.findIndex(
-            (variant) =>
-              String(variant.localId) === String(editingVariantLocalId),
-          ),
-          0,
-        )
+        variantRows.findIndex(
+          (variant) =>
+            String(variant.localId) === String(editingVariantLocalId),
+        ),
+        0,
+      )
       : variantRows.length;
     const nextVariantWithSku = {
       ...nextVariant,
@@ -1361,10 +1361,10 @@ export default function VendorProducts() {
     setVariantRows((previous) => {
       const nextRows = editingVariantLocalId
         ? previous.map((variant) =>
-            variant.localId === editingVariantLocalId
-              ? nextVariantWithSku
-              : variant,
-          )
+          variant.localId === editingVariantLocalId
+            ? nextVariantWithSku
+            : variant,
+        )
         : [...previous, nextVariantWithSku];
 
       return ensureSingleDefaultVariant(
@@ -1599,13 +1599,13 @@ export default function VendorProducts() {
       const images = hasUploadedGalleryFiles
         ? []
         : [
-            ...new Set([
-              ...existingGalleryImages
-                .map(normalizeImageSource)
-                .filter(Boolean),
-              ...linkedGalleryImages,
-            ]),
-          ];
+          ...new Set([
+            ...existingGalleryImages
+              .map(normalizeImageSource)
+              .filter(Boolean),
+            ...linkedGalleryImages,
+          ]),
+        ];
 
       if (
         targetStatus === PRODUCT_STATUS.PENDING &&
@@ -1736,9 +1736,9 @@ export default function VendorProducts() {
       const resolvedOldPrice =
         normalizedVariants.length > 0
           ? Math.max(
-              ...normalizedVariants.map((variant) => variant.oldPrice),
-              resolvedPrice,
-            )
+            ...normalizedVariants.map((variant) => variant.oldPrice),
+            resolvedPrice,
+          )
           : price;
       const resolvedStock =
         normalizedVariants.length > 0
@@ -2325,7 +2325,7 @@ export default function VendorProducts() {
                         type="text"
                         placeholder={
                           form.category === "fashion-nam" ||
-                          form.category === "fashion-nu"
+                            form.category === "fashion-nu"
                             ? "VD: Zara, H&M"
                             : "VD: Samsung, Lock&Lock, Orion"
                         }
@@ -2792,11 +2792,10 @@ export default function VendorProducts() {
                           </span>
                           <span>
                             <span
-                              className={`vendor-products-variant-summary__badge ${
-                                variantStock > 0
-                                  ? "vendor-products-variant-summary__badge--stock"
-                                  : "vendor-products-variant-summary__badge--out"
-                              }`}
+                              className={`vendor-products-variant-summary__badge ${variantStock > 0
+                                ? "vendor-products-variant-summary__badge--stock"
+                                : "vendor-products-variant-summary__badge--out"
+                                }`}
                             >
                               {variantStock > 0 ? "In stock" : "Out of stock"}
                             </span>
@@ -2854,18 +2853,7 @@ export default function VendorProducts() {
               <button type="button" onClick={resetForm} disabled={isSaving}>
                 Reset
               </button>
-              {canUpdateLive && (
-                <button
-                  type="button"
-                  disabled={isSaving}
-                  className="vendor-products-actions__live-btn"
-                  onClick={() => {
-                    void handleSaveProduct(PRODUCT_STATUS.ACTIVE);
-                  }}
-                >
-                  Update live (keep Active)
-                </button>
-              )}
+
               <button
                 type="button"
                 disabled={isSaving}
@@ -2900,7 +2888,7 @@ export default function VendorProducts() {
         {!isLoading && !isError && (
           <div className="vendor-products-table">
             <div className="vendor-products-table__row vendor-products-table__head">
-              <span>#</span>
+              <span></span>
               <span>Item</span>
               <span>Price</span>
               <span>Sold</span>
@@ -2929,12 +2917,18 @@ export default function VendorProducts() {
                   .toLowerCase() === PRODUCT_STATUS.DRAFT;
               const isEnrolledInCurrentFlashSale =
                 String(product?.flashSaleCampaignId ?? "").trim() ===
-                  String(flashSaleState?.currentCampaignId ?? "").trim() &&
+                String(flashSaleState?.currentCampaignId ?? "").trim() &&
                 Number(product?.flashSaleDiscountPercent ?? 0) > 0;
 
               return (
                 <div className="vendor-products-table__row" key={product.id}>
-                  <span>{(currentPage - 1) * itemsPerPage + index + 1}</span>
+                  <span>
+                    <img
+                      className="vendor-products-table__thumbnail"
+                      src={product.thumbnail || "/favicon.svg"}
+                      alt={product.title || "Product thumbnail"}
+                    />
+                  </span>
                   <span>
                     <Link to={`/product/${product.id}`} state={{ product }}>
                       {product.title}
@@ -2979,11 +2973,10 @@ export default function VendorProducts() {
 
                       <button
                         type="button"
-                        className={`vendor-action-btn vendor-action-btn--icon ${
-                          isInactive
-                            ? "vendor-action-btn--show"
-                            : "vendor-action-btn--hide"
-                        }`}
+                        className={`vendor-action-btn vendor-action-btn--icon ${isInactive
+                          ? "vendor-action-btn--show"
+                          : "vendor-action-btn--hide"
+                          }`}
                         disabled={isSaving || isRejected}
                         onClick={() =>
                           handleAction(product, isInactive ? "show" : "hide")

@@ -1,5 +1,6 @@
 .product-detail-page.o-container {
   padding-top: 20px;
+  padding-bottom: 38px;
 }
 
 .breadcrumb {
@@ -105,11 +106,9 @@
   position: static;
   border-radius: 16px;
   border: 1px solid rgba(203, 213, 225, 0.7);
-  background: linear-gradient(
-    140deg,
-    rgba(255, 255, 255, 0.82),
-    rgba(248, 250, 252, 0.9)
-  );
+  background: linear-gradient(140deg,
+      rgba(255, 255, 255, 0.82),
+      rgba(248, 250, 252, 0.9));
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 24px 44px rgba(15, 23, 42, 0.08);
@@ -309,6 +308,7 @@
   padding: 8px;
   cursor: pointer;
 }
+
 .color-option-label.is-active {
   background-color: black;
   color: white;
@@ -464,7 +464,7 @@
   padding: 16px 18px;
 }
 
-.delivery-box__item + .delivery-box__item {
+.delivery-box__item+.delivery-box__item {
   border-top: 1px solid #d9d9d9;
 }
 
@@ -521,7 +521,7 @@
 }
 
 .product-reviews__list-wrap {
-  min-height: 250px;
+  min-height: 130px;
 }
 
 .product-reviews__list {
@@ -711,22 +711,18 @@ body[data-theme="dark"] .product-gallery__thumb.is-active {
 
 body[data-theme="dark"] .product-gallery__main {
   border-color: rgba(255, 255, 255, 0.08);
-  background: radial-gradient(
-    circle at 35% 30%,
-    #232936 0%,
-    #131821 62%,
-    #0b0f16 100%
-  );
+  background: radial-gradient(circle at 35% 30%,
+      #232936 0%,
+      #131821 62%,
+      #0b0f16 100%);
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3);
 }
 
 body[data-theme="dark"] .product-info-card {
   border-color: rgba(255, 255, 255, 0.08);
-  background: linear-gradient(
-    145deg,
-    rgba(24, 28, 36, 0.95),
-    rgba(14, 17, 24, 0.98)
-  );
+  background: linear-gradient(145deg,
+      rgba(24, 28, 36, 0.95),
+      rgba(14, 17, 24, 0.98));
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.32);
 }
 
@@ -847,14 +843,12 @@ body[data-theme="dark"] .product-detail-helper--warning {
 
 body[data-theme="dark"] .delivery-box {
   border-color: rgba(255, 255, 255, 0.08);
-  background: linear-gradient(
-    180deg,
-    rgba(18, 22, 30, 0.92),
-    rgba(11, 14, 20, 0.96)
-  );
+  background: linear-gradient(180deg,
+      rgba(18, 22, 30, 0.92),
+      rgba(11, 14, 20, 0.96));
 }
 
-body[data-theme="dark"] .delivery-box__item + .delivery-box__item {
+body[data-theme="dark"] .delivery-box__item+.delivery-box__item {
   border-top-color: rgba(255, 255, 255, 0.08);
 }
 

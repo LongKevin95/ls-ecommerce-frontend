@@ -3,6 +3,7 @@
   gap: 20px;
   position: relative;
 }
+
 .vendor-products-two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -73,9 +74,11 @@
   grid-template-columns: 80px 1fr;
   align-items: center;
 }
-.vendor-products-variant-summary__meta label > span {
+
+.vendor-products-variant-summary__meta label>span {
   white-space: normal;
 }
+
 .vendor-products-variant-summary__meta label input,
 .vendor-products-variant-summary__meta label select,
 .vendor-products-variant-summary__meta label textarea {
@@ -235,6 +238,7 @@
 }
 
 .vendor-products-actions {
+  margin-top: 12px;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -403,6 +407,7 @@
 }
 
 .vendor-products-variant-summary {
+  margin-top: 20px;
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -460,14 +465,14 @@
 }
 
 .vendor-products-variant-table__head {
-      padding: 10px 12px;
-    border-radius: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
   font-weight: 600;
   background: #eff6ff;
 }
 
-.vendor-products-variant-table__row > th,
-.vendor-products-variant-table__row > td {
+.vendor-products-variant-table__row>th,
+.vendor-products-variant-table__row>td {
 
   border-bottom: 1px solid #e2e8f0;
   display: flex;
@@ -488,6 +493,7 @@
   -webkit-appearance: none;
   margin: 0;
 }
+
 .vendor-products-page input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
@@ -549,7 +555,7 @@
   color: #94a3b8;
   font-size: 11px;
   text-align: center;
- 
+
 }
 
 .vendor-products-variant-summary__media img {
@@ -689,6 +695,16 @@
 .vendor-products-table__head {
   font-weight: 600;
   background: #eff6ff;
+}
+
+.vendor-products-table__thumbnail {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f1f5f9;
+  display: block;
 }
 
 .vendor-action-control {
@@ -857,6 +873,7 @@
     grid-template-columns: 1fr;
     gap: 16px;
   }
+
   .vendor-products-form {
     grid-template-columns: 1fr;
   }
@@ -878,7 +895,7 @@
     grid-template-columns: 1fr;
   }
 
-  .vendor-products-variant-summary__item {
+  .__item {
     display: grid;
     grid-template-columns: 1fr;
   }
