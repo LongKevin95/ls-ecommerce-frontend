@@ -351,7 +351,10 @@ function Home() {
             return soldCountDiff;
           }
 
-          return Number(secondProduct?.reviews ?? 0) - Number(firstProduct?.reviews ?? 0);
+          return (
+            Number(secondProduct?.reviews ?? 0) -
+            Number(firstProduct?.reviews ?? 0)
+          );
         })
         .slice(0, 4),
     [filteredProducts],

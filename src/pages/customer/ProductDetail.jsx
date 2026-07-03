@@ -324,6 +324,10 @@ function ProductDetail() {
     product?.defaultVariant ??
     productVariants[0] ??
     null;
+  const displayProductTitle =
+    String(selectedVariant?.title ?? "").trim() ||
+    String(product?.title ?? "").trim() ||
+    "Product Detail";
   const selectedVariantOptionValues = useMemo(
     () =>
       Object.fromEntries(
@@ -636,7 +640,7 @@ function ProductDetail() {
           {product ? formatProductCategoryLabel(product.category) : "Product"}
         </span>
         <span>&gt;</span>
-        <strong>{product?.title || "Product Detail"}</strong>
+        <strong>{displayProductTitle}</strong>
       </nav>
 
       {product ? (
@@ -665,13 +669,13 @@ function ProductDetail() {
               </div>
 
               <div className="product-gallery__main">
-                <img src={selectedGalleryImage} alt={product.title} />
+                <img src={selectedGalleryImage} alt={displayProductTitle} />
               </div>
             </div>
 
             <div className="product-info">
               <div className="product-info-card">
-                <h1>{product.title}</h1>
+                <h1>{displayProductTitle}</h1>
 
                 <div className="product-info__rating-row">
                   <span className="rating-stars">

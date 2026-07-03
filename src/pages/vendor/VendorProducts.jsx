@@ -406,6 +406,93 @@ function hasMeaningfulVariantDraft(variant) {
   );
 }
 
+function parseStockValue(value) {
+  const normalizedValue = String(value ?? "").trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const parsedValue = Number(normalizedValue);
+
+  if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+    return null;
+  }
+
+  return parsedValue;
+}
+
+function getTotalVariantStock(variants) {
+  return (Array.isArray(variants) ? variants : []).reduce(
+    (sum, variant) => sum + (parseStockValue(variant?.stock) ?? 0),
+    0,
+  );
+}
+
+function getVariantStockOverflowLocalIds(
+  variants,
+  totalStockValue,
+  prioritizedLocalId = "",
+) {
+  const parsedTotalStock = parseStockValue(totalStockValue);
+
+  if (parsedTotalStock === null) {
+    return new Set();
+  }
+
+  const normalizedVariants = (Array.isArray(variants) ? variants : [])
+    .map((variant) => ({
+      localId: String(variant?.localId ?? "").trim(),
+      stock: parseStockValue(variant?.stock) ?? 0,
+    }))
+    .filter((variant) => variant.localId);
+  let remainingOverflow =
+    normalizedVariants.reduce((sum, variant) => sum + variant.stock, 0) -
+    parsedTotalStock;
+
+  if (remainingOverflow <= 0) {
+    return new Set();
+  }
+
+  const overflowLocalIds = new Set();
+  const normalizedPrioritizedLocalId = String(prioritizedLocalId ?? "").trim();
+
+  if (normalizedPrioritizedLocalId) {
+    const prioritizedVariant = normalizedVariants.find(
+      (variant) => variant.localId === normalizedPrioritizedLocalId,
+    );
+
+    if (prioritizedVariant && prioritizedVariant.stock > 0) {
+      overflowLocalIds.add(prioritizedVariant.localId);
+      remainingOverflow -= Math.min(
+        remainingOverflow,
+        prioritizedVariant.stock,
+      );
+    }
+  }
+
+  for (let index = normalizedVariants.length - 1; index >= 0; index -= 1) {
+    if (remainingOverflow <= 0) {
+      break;
+    }
+
+    const variant = normalizedVariants[index];
+
+    if (
+      !variant.localId ||
+      overflowLocalIds.has(variant.localId) ||
+      variant.stock <= 0
+    ) {
+      continue;
+    }
+
+    overflowLocalIds.add(variant.localId);
+    remainingOverflow -= Math.min(remainingOverflow, variant.stock);
+  }
+
+  return overflowLocalIds;
+}
+
 function parseInputList(text) {
   return String(text ?? "")
     .split(/[\n,]/g)
@@ -665,6 +752,10 @@ export default function VendorProducts() {
     createVariantGeneratorInputs(defaultForm.category),
   );
   const [editingVariantLocalId, setEditingVariantLocalId] = useState("");
+  const [
+    variantStockOverflowPriorityLocalId,
+    setVariantStockOverflowPriorityLocalId,
+  ] = useState("");
   const [imagePendingRemoval, setImagePendingRemoval] = useState(null);
   const [editingId, setEditingId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -708,7 +799,7 @@ export default function VendorProducts() {
     return vendorProducts.filter(
       (product) =>
         String(product?.flashSaleCampaignId ?? "").trim() ===
-        String(flashSaleState?.currentCampaignId ?? "").trim() &&
+          String(flashSaleState?.currentCampaignId ?? "").trim() &&
         Number(product?.flashSaleDiscountPercent ?? 0) > 0,
     );
   }, [
@@ -724,26 +815,6 @@ export default function VendorProducts() {
   }, [vendorProducts, currentPage, itemsPerPage]);
 
   const totalPages = Math.ceil(vendorProducts.length / itemsPerPage);
-
-  const editingProduct = useMemo(() => {
-    if (!editingId) {
-      return null;
-    }
-
-    return (
-      vendorProducts.find((p) => String(p?.id ?? "") === String(editingId)) ??
-      null
-    );
-  }, [vendorProducts, editingId]);
-
-  const editingProductStatusKey = useMemo(() => {
-    return String(editingProduct?.status ?? "")
-      .trim()
-      .toLowerCase();
-  }, [editingProduct]);
-
-  const canUpdateLive =
-    Boolean(editingId) && editingProductStatusKey === PRODUCT_STATUS.ACTIVE;
 
   function syncProductCaches(nextProduct) {
     const normalizedId = String(nextProduct?.id ?? "").trim();
@@ -802,6 +873,14 @@ export default function VendorProducts() {
     () => normalizeVariantAttributeFields(form.category),
     [form.category],
   );
+  const totalVariantStockLimit = useMemo(
+    () => parseStockValue(form.stock),
+    [form.stock],
+  );
+  const totalAllocatedVariantStock = useMemo(
+    () => getTotalVariantStock(variantRows),
+    [variantRows],
+  );
   const defaultVariantLocalId = useMemo(
     () =>
       String(
@@ -809,6 +888,46 @@ export default function VendorProducts() {
       ).trim(),
     [variantRows],
   );
+  const editingVariantStockValue = useMemo(() => {
+    if (!editingVariantLocalId) {
+      return 0;
+    }
+
+    const editingVariant = variantRows.find(
+      (variant) => String(variant.localId) === String(editingVariantLocalId),
+    );
+
+    return parseStockValue(editingVariant?.stock) ?? 0;
+  }, [editingVariantLocalId, variantRows]);
+  const invalidVariantStockLocalIds = useMemo(() => {
+    return getVariantStockOverflowLocalIds(
+      variantRows,
+      totalVariantStockLimit,
+      variantStockOverflowPriorityLocalId,
+    );
+  }, [
+    variantRows,
+    totalVariantStockLimit,
+    variantStockOverflowPriorityLocalId,
+  ]);
+  const isVariantDraftStockOverflow = useMemo(() => {
+    if (totalVariantStockLimit === null) {
+      return false;
+    }
+
+    const draftStockValue = parseStockValue(variantDraft.stock) ?? 0;
+    const nextAllocatedVariantStock = editingVariantLocalId
+      ? totalAllocatedVariantStock - editingVariantStockValue + draftStockValue
+      : totalAllocatedVariantStock + draftStockValue;
+
+    return nextAllocatedVariantStock > totalVariantStockLimit;
+  }, [
+    editingVariantLocalId,
+    editingVariantStockValue,
+    totalAllocatedVariantStock,
+    totalVariantStockLimit,
+    variantDraft.stock,
+  ]);
 
   const [duplicateLocalIds, setDuplicateLocalIds] = useState(new Set());
 
@@ -851,26 +970,26 @@ export default function VendorProducts() {
       const nextVariantRows =
         Array.isArray(product?.variants) && product.variants.length > 0
           ? ensureSingleDefaultVariant(
-            product.variants.map((variant) =>
-              createVariantDraft(product.category, {
-                localId: variant.id,
-                sku: variant.sku,
-                title: variant.title,
-                price: variant.price,
-                oldPrice: variant.oldPrice,
-                stock: variant.stock,
-                image: variant.image,
-                isDefault: variant.isDefault,
-                optionValues: variant.optionValues,
-                attributes: variant.attributes,
-              }),
-            ),
-            String(
-              product.variants.find((variant) => variant?.isDefault)?.id ??
-              product.defaultVariantId ??
-              "",
-            ).trim(),
-          )
+              product.variants.map((variant) =>
+                createVariantDraft(product.category, {
+                  localId: variant.id,
+                  sku: variant.sku,
+                  title: variant.title,
+                  price: variant.price,
+                  oldPrice: variant.oldPrice,
+                  stock: variant.stock,
+                  image: variant.image,
+                  isDefault: variant.isDefault,
+                  optionValues: variant.optionValues,
+                  attributes: variant.attributes,
+                }),
+              ),
+              String(
+                product.variants.find((variant) => variant?.isDefault)?.id ??
+                  product.defaultVariantId ??
+                  "",
+              ).trim(),
+            )
           : [];
 
       setEditingId(String(product.id));
@@ -883,10 +1002,10 @@ export default function VendorProducts() {
         flashSaleEnabled:
           isFlashSaleCampaignOpen &&
           String(product?.flashSaleCampaignId ?? "").trim() ===
-          String(flashSaleState?.currentCampaignId ?? "").trim(),
+            String(flashSaleState?.currentCampaignId ?? "").trim(),
         flashSaleDiscountPercent:
           isFlashSaleCampaignOpen &&
-            String(product?.flashSaleCampaignId ?? "").trim() ===
+          String(product?.flashSaleCampaignId ?? "").trim() ===
             String(flashSaleState?.currentCampaignId ?? "").trim()
             ? String(product?.flashSaleDiscountPercent ?? "")
             : "",
@@ -920,6 +1039,7 @@ export default function VendorProducts() {
           image: productThumbnail,
         }),
       );
+      setVariantStockOverflowPriorityLocalId("");
       setVariantGeneratorInputs(
         buildGeneratorInputsFromVariants(product.category, nextVariantRows),
       );
@@ -1094,7 +1214,7 @@ export default function VendorProducts() {
       ...previous,
       thumbnailUrl:
         normalizeImageSource(previous.thumbnailUrl) ===
-          normalizeImageSource(existingThumbnail)
+        normalizeImageSource(existingThumbnail)
           ? ""
           : previous.thumbnailUrl,
     }));
@@ -1202,6 +1322,7 @@ export default function VendorProducts() {
       createVariantGeneratorInputs(defaultForm.category),
     );
     setEditingVariantLocalId("");
+    setVariantStockOverflowPriorityLocalId("");
     setImagePendingRemoval(null);
     setEditingId("");
     setSaveIntent("");
@@ -1227,6 +1348,9 @@ export default function VendorProducts() {
       );
       return nextRows;
     });
+    setVariantStockOverflowPriorityLocalId((previous) =>
+      String(previous) === String(localId) ? "" : previous,
+    );
 
     if (String(editingVariantLocalId) === String(localId)) {
       resetVariantDraft();
@@ -1304,18 +1428,23 @@ export default function VendorProducts() {
       return;
     }
 
+    if (isVariantDraftStockOverflow) {
+      setErrorMessage("Please review the variant stock quantity.");
+      return;
+    }
+
     const nextVariant = createVariantDraft(form.category, {
       ...variantDraft,
       localId: editingVariantLocalId || variantDraft.localId,
     });
     const nextVariantIndex = editingVariantLocalId
       ? Math.max(
-        variantRows.findIndex(
-          (variant) =>
-            String(variant.localId) === String(editingVariantLocalId),
-        ),
-        0,
-      )
+          variantRows.findIndex(
+            (variant) =>
+              String(variant.localId) === String(editingVariantLocalId),
+          ),
+          0,
+        )
       : variantRows.length;
     const nextVariantWithSku = {
       ...nextVariant,
@@ -1361,10 +1490,10 @@ export default function VendorProducts() {
     setVariantRows((previous) => {
       const nextRows = editingVariantLocalId
         ? previous.map((variant) =>
-          variant.localId === editingVariantLocalId
-            ? nextVariantWithSku
-            : variant,
-        )
+            variant.localId === editingVariantLocalId
+              ? nextVariantWithSku
+              : variant,
+          )
         : [...previous, nextVariantWithSku];
 
       return ensureSingleDefaultVariant(
@@ -1426,6 +1555,10 @@ export default function VendorProducts() {
       }),
     );
 
+    if (fieldName === "stock") {
+      setVariantStockOverflowPriorityLocalId(String(localId));
+    }
+
     if (errorMessage) {
       setErrorMessage("");
     }
@@ -1450,6 +1583,11 @@ export default function VendorProducts() {
       setErrorMessage(
         `Please enter at least one value for ${missingField.label}.`,
       );
+      return;
+    }
+
+    if (isVariantDraftStockOverflow) {
+      setErrorMessage("Please review the variant stock quantity.");
       return;
     }
 
@@ -1540,6 +1678,16 @@ export default function VendorProducts() {
       return;
     }
 
+    if (
+      totalVariantStockLimit !== null &&
+      totalAllocatedVariantStock +
+        getTotalVariantStock(generatedVariantsWithSku) >
+        totalVariantStockLimit
+    ) {
+      setErrorMessage("Please review the variant stock quantity.");
+      return;
+    }
+
     setVariantRows((previous) =>
       ensureSingleDefaultVariant(
         [...previous, ...generatedVariantsWithSku],
@@ -1582,6 +1730,11 @@ export default function VendorProducts() {
       return;
     }
 
+    if (invalidVariantStockLocalIds.size > 0) {
+      setErrorMessage("Please review the variant stock quantity.");
+      return;
+    }
+
     if (!vendorEmail) {
       setErrorMessage("Signed-in vendor information was not found.");
       return;
@@ -1599,13 +1752,13 @@ export default function VendorProducts() {
       const images = hasUploadedGalleryFiles
         ? []
         : [
-          ...new Set([
-            ...existingGalleryImages
-              .map(normalizeImageSource)
-              .filter(Boolean),
-            ...linkedGalleryImages,
-          ]),
-        ];
+            ...new Set([
+              ...existingGalleryImages
+                .map(normalizeImageSource)
+                .filter(Boolean),
+              ...linkedGalleryImages,
+            ]),
+          ];
 
       if (
         targetStatus === PRODUCT_STATUS.PENDING &&
@@ -1736,14 +1889,10 @@ export default function VendorProducts() {
       const resolvedOldPrice =
         normalizedVariants.length > 0
           ? Math.max(
-            ...normalizedVariants.map((variant) => variant.oldPrice),
-            resolvedPrice,
-          )
+              ...normalizedVariants.map((variant) => variant.oldPrice),
+              resolvedPrice,
+            )
           : price;
-      const resolvedStock =
-        normalizedVariants.length > 0
-          ? normalizedVariants.reduce((sum, variant) => sum + variant.stock, 0)
-          : stock;
       const wantsFlashSale = Boolean(form.flashSaleEnabled);
       const flashSaleDiscountPercent = String(
         form.flashSaleDiscountPercent ?? "",
@@ -1820,7 +1969,7 @@ export default function VendorProducts() {
         description,
         price: resolvedPrice,
         oldPrice: resolvedOldPrice,
-        stock: resolvedStock,
+        stock,
         thumbnail,
         thumbnailFile: selectedThumbnailFile,
         gallery: images,
@@ -2325,7 +2474,7 @@ export default function VendorProducts() {
                         type="text"
                         placeholder={
                           form.category === "fashion-nam" ||
-                            form.category === "fashion-nu"
+                          form.category === "fashion-nu"
                             ? "VD: Zara, H&M"
                             : "VD: Samsung, Lock&Lock, Orion"
                         }
@@ -2586,7 +2735,13 @@ export default function VendorProducts() {
                         />
                       </label>
 
-                      <label>
+                      <label
+                        className={
+                          isVariantDraftStockOverflow
+                            ? "vendor-products-input is-error"
+                            : ""
+                        }
+                      >
                         Stock
                         <input
                           type="number"
@@ -2599,6 +2754,11 @@ export default function VendorProducts() {
                             )
                           }
                         />
+                        {isVariantDraftStockOverflow && (
+                          <span className="vendor-products-input__error">
+                            Quá số lượng tồn kho
+                          </span>
+                        )}
                       </label>
 
                       <label className="is-full">
@@ -2723,6 +2883,9 @@ export default function VendorProducts() {
                       const isDuplicate = duplicateLocalIds.has(
                         String(variant.localId),
                       );
+                      const isStockOverflow = invalidVariantStockLocalIds.has(
+                        String(variant.localId),
+                      );
 
                       return (
                         <div
@@ -2776,7 +2939,18 @@ export default function VendorProducts() {
                               }
                             />
                           </span>
-                          <span>
+                          <span
+                            className={
+                              isStockOverflow
+                                ? "vendor-products-input is-error"
+                                : "vendor-products-input"
+                            }
+                          >
+                            {isStockOverflow && (
+                              <span className="vendor-products-input__error">
+                                Quá số lượng tồn kho
+                              </span>
+                            )}
                             <input
                               type="number"
                               min="0"
@@ -2792,10 +2966,11 @@ export default function VendorProducts() {
                           </span>
                           <span>
                             <span
-                              className={`vendor-products-variant-summary__badge ${variantStock > 0
-                                ? "vendor-products-variant-summary__badge--stock"
-                                : "vendor-products-variant-summary__badge--out"
-                                }`}
+                              className={`vendor-products-variant-summary__badge ${
+                                variantStock > 0
+                                  ? "vendor-products-variant-summary__badge--stock"
+                                  : "vendor-products-variant-summary__badge--out"
+                              }`}
                             >
                               {variantStock > 0 ? "In stock" : "Out of stock"}
                             </span>
@@ -2899,7 +3074,7 @@ export default function VendorProducts() {
               <span>Action</span>
             </div>
 
-            {paginatedVendorProducts.map((product, index) => {
+            {paginatedVendorProducts.map((product) => {
               const isRowUpdating =
                 processingProductId &&
                 String(processingProductId) === String(product.id);
@@ -2917,7 +3092,7 @@ export default function VendorProducts() {
                   .toLowerCase() === PRODUCT_STATUS.DRAFT;
               const isEnrolledInCurrentFlashSale =
                 String(product?.flashSaleCampaignId ?? "").trim() ===
-                String(flashSaleState?.currentCampaignId ?? "").trim() &&
+                  String(flashSaleState?.currentCampaignId ?? "").trim() &&
                 Number(product?.flashSaleDiscountPercent ?? 0) > 0;
 
               return (
@@ -2973,10 +3148,11 @@ export default function VendorProducts() {
 
                       <button
                         type="button"
-                        className={`vendor-action-btn vendor-action-btn--icon ${isInactive
-                          ? "vendor-action-btn--show"
-                          : "vendor-action-btn--hide"
-                          }`}
+                        className={`vendor-action-btn vendor-action-btn--icon ${
+                          isInactive
+                            ? "vendor-action-btn--show"
+                            : "vendor-action-btn--hide"
+                        }`}
                         disabled={isSaving || isRejected}
                         onClick={() =>
                           handleAction(product, isInactive ? "show" : "hide")

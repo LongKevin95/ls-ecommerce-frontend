@@ -75,7 +75,7 @@
   align-items: center;
 }
 
-.vendor-products-variant-summary__meta label>span {
+.vendor-products-variant-summary__meta label > span {
   white-space: normal;
 }
 
@@ -471,9 +471,8 @@
   background: #eff6ff;
 }
 
-.vendor-products-variant-table__row>th,
-.vendor-products-variant-table__row>td {
-
+.vendor-products-variant-table__row > th,
+.vendor-products-variant-table__row > td {
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
@@ -507,7 +506,6 @@
 
 .vendor-products-variant-table th,
 .vendor-products-variant-table td {
-
   text-align: left;
   border-bottom: 1px solid #e2e8f0;
   vertical-align: middle;
@@ -555,7 +553,6 @@
   color: #94a3b8;
   font-size: 11px;
   text-align: center;
-
 }
 
 .vendor-products-variant-summary__media img {
@@ -588,6 +585,12 @@
   gap: 8px 16px;
   color: #475569;
   font-size: 13px;
+}
+
+.vendor-products-input {
+  display: grid !important;
+  gap: 6px;
+  align-items: start !important;
 }
 
 .vendor-products-input.is-error input {
