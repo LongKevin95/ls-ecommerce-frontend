@@ -120,10 +120,11 @@ export default function Login() {
         </button>
 
         <p className="signin-hint">
-          Chua co tai khoan? Hay{" "}
+          Chưa có tài khoản? Hãy{" "}
           <Link className="signin-hint-link" to="/signup">
-            dang ky ngay!
+            đăng ký
           </Link>
+          {` `}ngay!
         </p>
       </form>
     </div>
