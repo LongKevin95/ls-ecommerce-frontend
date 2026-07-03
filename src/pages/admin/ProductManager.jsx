@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { PRODUCT_STATUS, updateProductById } from "../../api/productApi";
 import { useAdminProductsQuery } from "../../hooks/useAdminProductsQuery";
+import { formatProductId } from "../../utils/entityId";
 import "./ProductManager.css";
 
 function formatStatus(status) {
@@ -178,7 +179,12 @@ export default function ProductManager() {
           return true;
         }
 
-        return [product?.id, product?.title, product?.category]
+        return [
+          product?.id,
+          formatProductId(product?.id),
+          product?.title,
+          product?.category,
+        ]
           .filter(Boolean)
           .some((item) =>
             String(item).toLowerCase().includes(normalizedKeyword),
@@ -361,7 +367,9 @@ export default function ProductManager() {
                         ? String(product.vendorEmail).split("@")[0]
                         : "Marketplace")}
                   </span>
-                  <span>{product.id || "N/A"}</span>
+                  <span title={product.id || "N/A"}>
+                    {formatProductId(product.id)}
+                  </span>
                   <span>${Number(product.price ?? 0)}</span>
                   <span>{product.stock ?? 0}</span>
                   <span>

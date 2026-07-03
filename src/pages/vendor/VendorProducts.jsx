@@ -11,6 +11,7 @@ import {
 import { useAdminProductsQuery } from "../../hooks/useAdminProductsQuery";
 import { useAuth } from "../../hooks/useAuth";
 import { useFlashSaleQuery } from "../../hooks/useFlashSaleQuery";
+import { formatProductId } from "../../utils/entityId";
 import { isProductOwnedByVendor } from "./vendorDataUtils";
 import "./VendorProducts.css";
 
@@ -3065,6 +3066,7 @@ export default function VendorProducts() {
             <div className="vendor-products-table__row vendor-products-table__head">
               <span></span>
               <span>Item</span>
+              <span>ID</span>
               <span>Price</span>
               <span>Sold</span>
               <span>Flash</span>
@@ -3108,6 +3110,9 @@ export default function VendorProducts() {
                     <Link to={`/product/${product.id}`} state={{ product }}>
                       {product.title}
                     </Link>
+                  </span>
+                  <span title={product.id || "N/A"}>
+                    {formatProductId(product.id)}
                   </span>
                   <span>${Number(product.price ?? 0)}</span>
                   <span>{Number(product.soldCount ?? 0)}</span>

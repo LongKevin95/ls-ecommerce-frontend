@@ -156,7 +156,9 @@ export function resolveOrderCustomer(order) {
 
   return {
     name:
-      order?.customerName ?? order?.name ?? shippingAddress?.fullName ?? "N/A",
+      normalizeText(order?.customerName) ||
+      normalizeText(order?.name) ||
+      normalizeText(shippingAddress?.fullName, "N/A"),
     email:
       normalizeEmail(
         order?.contactEmail ??

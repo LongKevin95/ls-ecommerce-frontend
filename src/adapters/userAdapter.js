@@ -7,6 +7,7 @@ export function normalizeUser(user) {
 
   return {
     id: String(user?.id ?? ""),
+    mongoId: String(user?.mongoId ?? ""),
     name: String(user?.name ?? "").trim(),
     email: String(user?.email ?? "")
       .trim()

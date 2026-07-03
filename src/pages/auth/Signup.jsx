@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../hooks/useAuth";
 import "./Signup.css";
@@ -119,7 +119,7 @@ export default function Signup() {
               aria-label="Toggle password visibility"
               onClick={() => setShowPassword((prev) => !prev)}
             >
-              👁
+              {showPassword ? "Hide" : "Show"}
             </button>
           </div>
 
@@ -141,7 +141,7 @@ export default function Signup() {
               aria-label="Toggle confirm password visibility"
               onClick={() => setShowConfirmPassword((prev) => !prev)}
             >
-              👁
+              {showConfirmPassword ? "Hide" : "Show"}
             </button>
           </div>
 
@@ -151,19 +151,15 @@ export default function Signup() {
               <span>Remember Me</span>
             </label>
 
-            <button
-              className="auth-link"
-              type="button"
-              onClick={() => navigate("/login")}
-            >
+            <Link className="auth-link" to="/login">
               Already have an account?
-            </button>
+            </Link>
           </div>
 
           {errorMessage && <p className="form-error">{errorMessage}</p>}
 
           <button className="auth-btn" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Signing Up..." : "Sign Up →"}
+            {isSubmitting ? "Signing Up..." : "Sign Up ->"}
           </button>
 
           <div className="auth-divider" aria-hidden="true">
@@ -186,7 +182,7 @@ export default function Signup() {
             <button type="button" className="auth-link">
               Terms
             </button>
-            &
+            &amp;
             <button type="button" className="auth-link">
               Privacy Policy
             </button>
@@ -194,14 +190,10 @@ export default function Signup() {
           </p>
 
           <p className="auth-switch">
-            <span>Already a customer?</span>
-            <button
-              className="auth-link"
-              type="button"
-              onClick={() => navigate("/login")}
-            >
-              Sign in instead
-            </button>
+            Da co tai khoan? Hay{" "}
+            <Link className="auth-link" to="/login">
+              dang nhap ngay!
+            </Link>
           </p>
         </form>
       </section>

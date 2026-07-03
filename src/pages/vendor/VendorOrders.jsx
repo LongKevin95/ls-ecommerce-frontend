@@ -20,6 +20,7 @@ import {
   resolveUpdatedAt,
   resolveVendorSubtotal,
 } from "./vendorDataUtils";
+import { formatOrderId } from "../../utils/entityId";
 import "./VendorDashboard.css";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -131,6 +132,7 @@ function XIcon() {
 function getOrderSearchableText(order) {
   return [
     order?.id,
+    formatOrderId(order?.id),
     order?.customer?.name,
     order?.customer?.email,
     order?.customer?.phone,
@@ -479,9 +481,9 @@ export default function VendorOrders() {
             : "No order data available."}
         </p>
       ) : (
-        <div className="vendor-table vendor-table--scrollable">
-          <div className="vendor-table__row vendor-table__row--orders-v1 vendor-table__row--head">
-            <span>Orrder ID</span>
+          <div className="vendor-table vendor-table--scrollable">
+            <div className="vendor-table__row vendor-table__row--orders-v1 vendor-table__row--head">
+            <span>Order ID</span>
             <span>Placed</span>
             <span>Customer</span>
             <span>Contact</span>
@@ -512,9 +514,10 @@ export default function VendorOrders() {
                 key={rowKey}
                 className="vendor-table__row vendor-table__row--orders-v1"
               >
-                <span className="vendor-order-id">
-                  {orderId ||
-                    `#${(currentPage - 1) * ITEMS_PER_PAGE + index + 1}`}
+                <span className="vendor-order-id" title={orderId || "N/A"}>
+                  {orderId
+                    ? formatOrderId(orderId)
+                    : `#${(currentPage - 1) * ITEMS_PER_PAGE + index + 1}`}
                 </span>
                 <span>{formatDate(order.date)}</span>
                 <span>
@@ -648,7 +651,9 @@ export default function VendorOrders() {
             <div className="vendor-modal__header">
               <div>
                 <h3>Order details</h3>
-                <p>{selectedOrder.id}</p>
+                <p title={selectedOrder.id || "N/A"}>
+                  {formatOrderId(selectedOrder.id)}
+                </p>
               </div>
               <button type="button" onClick={() => setSelectedOrderId("")}>
                 ×
@@ -789,7 +794,9 @@ export default function VendorOrders() {
             <div className="vendor-modal__header">
               <div>
                 <h3>Cancel order</h3>
-                <p>{cancelTargetOrder.id}</p>
+                <p title={cancelTargetOrder.id || "N/A"}>
+                  {formatOrderId(cancelTargetOrder.id)}
+                </p>
               </div>
               <button type="button" onClick={handleCloseCancelModal}>
                 ×

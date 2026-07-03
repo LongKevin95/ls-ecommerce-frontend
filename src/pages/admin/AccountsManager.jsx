@@ -7,6 +7,7 @@ import {
   USERS_QUERY_SCOPE,
 } from "../../api/usersApi";
 import { useUsersQuery } from "../../hooks/useUsersQuery";
+import { formatUserId } from "../../utils/entityId";
 import "./VendorManager.css";
 
 const statusOptions = ["all", "active", "banned", "rejected"];
@@ -188,7 +189,13 @@ export default function AccountsManager() {
         return true;
       }
 
-      return [account.accountName, account.email, account.role]
+      return [
+        account.id,
+        formatUserId(account.id),
+        account.accountName,
+        account.email,
+        account.role,
+      ]
         .filter(Boolean)
         .some((value) =>
           String(value).toLowerCase().includes(normalizedKeyword),
@@ -328,7 +335,9 @@ export default function AccountsManager() {
                   key={account.id ?? account.email}
                 >
                   <span>{(currentPage - 1) * itemsPerPage + index + 1}</span>
-                  <span>{account.id || "N/A"}</span>
+                  <span title={account.id || "N/A"}>
+                    {formatUserId(account.id)}
+                  </span>
                   <span>{account.accountName}</span>
                   <span>{account.email}</span>
                   <span>{formatRole(account.role)}</span>

@@ -70,7 +70,10 @@
   transform: translateY(-50%);
   cursor: pointer;
   color: #777;
-  font-size: 18px;
+  font-size: 13px;
+  border: none;
+  background: transparent;
+  padding: 0;
 }
 
 .signin-options {
@@ -123,4 +126,14 @@
   font-size: 14px;
   text-align: center;
   color: rgba(17, 24, 39, 0.7);
+}
+
+.signin-hint-link {
+  color: #111827;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.signin-hint-link:hover {
+  text-decoration: underline;
 }

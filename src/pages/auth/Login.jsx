@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../hooks/useAuth";
 import "./Login.css";
@@ -16,11 +16,11 @@ export default function Login() {
   const [formValues, setFormValues] = useState(defaultFormValues);
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const fromLocation = location.state?.from;
   const defaultTarget = user?.roles?.includes("admin") ? "/admin" : "/";
   const redirectTarget = `${fromLocation?.pathname ?? defaultTarget}${fromLocation?.search ?? ""}${fromLocation?.hash ?? ""}`;
-  const fromLabel = redirectTarget === "/" ? "trang chủ" : redirectTarget;
 
   if (user) {
     return <Navigate to={redirectTarget} replace />;
@@ -55,7 +55,7 @@ export default function Login() {
     } catch (error) {
       setErrorMessage(
         error?.message ??
-          "Đăng nhập tạm thời chưa thành công. Vui lòng thử lại.",
+          "Dang nhap tam thoi chua thanh cong. Vui long thu lai.",
       );
     } finally {
       setIsSubmitting(false);
@@ -82,7 +82,7 @@ export default function Login() {
 
         <div className="signin-group signin-group--icon">
           <input
-            type="password"
+            type={showPassword ? "text" : "password"}
             name="password"
             placeholder="Password"
             className="signin-input"
@@ -91,9 +91,14 @@ export default function Login() {
             onChange={handleChange}
             required
           />
-          <span className="signin-eye" aria-hidden="true">
-            👁
-          </span>
+          <button
+            className="signin-eye"
+            type="button"
+            aria-label="Toggle password visibility"
+            onClick={() => setShowPassword((previousValue) => !previousValue)}
+          >
+            {showPassword ? "Hide" : "Show"}
+          </button>
         </div>
 
         <div className="signin-options">
@@ -111,11 +116,14 @@ export default function Login() {
         )}
 
         <button type="submit" className="signin-btn" disabled={isSubmitting}>
-          {isSubmitting ? "Signing In..." : "Sign In →"}
+          {isSubmitting ? "Signing In..." : "Sign In ->"}
         </button>
 
         <p className="signin-hint">
-          Đăng nhập để tiếp tục tới <strong>{fromLabel}</strong>
+          Chua co tai khoan? Hay{" "}
+          <Link className="signin-hint-link" to="/signup">
+            dang ky ngay!
+          </Link>
         </p>
       </form>
     </div>

@@ -31,12 +31,20 @@ function getCurrentRoles() {
 }
 
 function buildProductById(products) {
-  return new Map(
-    (Array.isArray(products) ? products : []).map((product) => [
-      normalizeText(product?.id ?? product?._id ?? ""),
-      product,
-    ]),
-  );
+  return (Array.isArray(products) ? products : []).reduce((map, product) => {
+    const publicId = normalizeText(product?.id ?? product?._id ?? "");
+    const mongoId = normalizeText(product?.mongoId ?? "");
+
+    if (publicId) {
+      map.set(publicId, product);
+    }
+
+    if (mongoId) {
+      map.set(mongoId, product);
+    }
+
+    return map;
+  }, new Map());
 }
 
 function enrichOrderWithProducts(order, productById, fallbackItems = []) {
@@ -288,6 +296,7 @@ function normalizeOrder(order) {
 
   return {
     id: String(order?.id ?? order?._id ?? `o-${Date.now()}`),
+    mongoId: normalizeText(order?.mongoId ?? order?._id ?? ""),
     customerId: normalizeText(order?.customerId ?? ""),
     customerEmail,
     customerName,
@@ -441,6 +450,10 @@ export const updateOrderById = async ({ id, updates, actor }) => {
   return normalizeOrder({
     ...updates,
     ...nextOrder,
+    cancellation:
+      updates?.cancellation && typeof updates.cancellation === "object"
+        ? updates.cancellation
+        : nextOrder?.cancellation,
   });
 };
 

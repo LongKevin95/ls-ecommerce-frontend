@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { updateOrderById } from "../../api/ordersApi";
 import { useOrdersQuery } from "../../hooks/useOrdersQuery";
+import { formatOrderId } from "../../utils/entityId";
 import "./OrdersManager.css";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -69,6 +70,7 @@ function getOrderText(order) {
 
   return [
     order?.id,
+    formatOrderId(order?.id),
     order?.customerName,
     order?.customerEmail,
     order?.contactEmail,
@@ -483,7 +485,9 @@ export default function OrdersManager() {
                       isActive ? "is-active" : ""
                     }`}
                   >
-                    <span>{orderId || "N/A"}</span>
+                    <span title={orderId || "N/A"}>
+                      {formatOrderId(orderId)}
+                    </span>
                     <span>{getCustomerLabel(order)}</span>
                     <span>
                       <span
@@ -563,7 +567,12 @@ export default function OrdersManager() {
               >
                 <div className="admin-orders__detail-header">
                   <div>
-                    <h2 id="admin-order-modal-title">{selectedOrder.id}</h2>
+                    <h2
+                      id="admin-order-modal-title"
+                      title={selectedOrder.id || "N/A"}
+                    >
+                      {formatOrderId(selectedOrder.id)}
+                    </h2>
                     <span
                       className={`admin-orders__pill ${getStatusTone(selectedOrderStatus)}`}
                     >
